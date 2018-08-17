@@ -40,7 +40,7 @@ void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
         x++;
         if(!b->getStopRunning())
         {
-            printf("The SCP listener stopped or failed to start.\nThis is the %d stop within the window.\n", x);
+            printf("The SCP listener stopped or failed to start.\n%d stop(s) within the window.\n", x);
         }
         //reset the timer
         start = time(0);
@@ -84,7 +84,7 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
 ConfigFile getConfig()
 {
     //TODO - change this to the directory this is launched from.
-    ConfigFile temp("/Users/bswearingen/scpLT/config.cfg");
+    ConfigFile temp("/Users/bswearingen/scpForward/config.cfg");
     return temp;
 }
 
@@ -92,35 +92,13 @@ void startDirectoryWatch(ConfigFile *cfg)
 {
     //TODO - would be better if the while loop captured the SCP listener running.
     //TODO - need a way to capture and restart a fail.
-    WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"));
+    WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"));
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.runChecks();
         sleep(2);
     }
 }
-
-//void watchConfig(ConfigFile *config)
-//{
-//    printf("Start\n");
-//    ConfigFile temp("/Users/bswearingen/scpLT/config.cfg");
-//    config = &temp;
-////    while( (config->getValueOfKey<std::string>("keep_running")) == "True")
-////    {
-////        //I'd prefer to watch the file and then update only if there's a change.
-////        ConfigFile temp("/Users/bswearingen/scpLT/config.cfg");
-////        //ConfigFile temp = loadConfig();
-////        //I don't like this, I need to lock config here and anywhere it is accessed.
-////        config = &temp;
-//////        if( (config.getValueOfKey<std::string>("keep_running")) != (temp.getValueOfKey<std::string>("keep_running")))
-//////        {
-//////            (config.getValueOfKey<std::string>("keep_running")) = (temp.getValueOfKey<std::string>("keep_running"));
-//////        }
-////        sleep(5);
-////        printf("%s\n", (config->getValueOfKey<std::string>("keep_running")).c_str() );
-////    }
-//    printf("Stop\n");
-//}
 
 int main(int /*argc*/, char * /*argv*/ [])
 {
@@ -153,12 +131,16 @@ int main(int /*argc*/, char * /*argv*/ [])
 
     
     //testing purposes for now
-    sleep(12);
+    sleep(3);
     //need a way to update this while running
     //printf("%s\n", ((cfg.getValueOfKey<std::string>("keep_running")) == "True")?"True":"False");
-    cfg.updateKey("keep_running", "False");
+    
+    
     //TODO - The future logic that watches cfg for updates will need to map back to this location in myListener.
+    //Do I really need to turn off both?
+    cfg.updateKey("keep_running", "False");
     myListener.setStopRunning(OFTrue);
+    
     printf("stop running should now be active\n");
     //printf("%s\n", ((cfg.getValueOfKey<std::string>("keep_running")) == "True")?"True":"False");
     
