@@ -18,13 +18,15 @@ private:
     typedef std::vector<std::string> stringvec;
     typedef std::vector<boost::filesystem::directory_entry> dirvec;
     std::string path;
-    
+    std::string finishedPath;
     
     void read_directory(const std::string& name, stringvec& v);
     void read_directory(const std::string& name, dirvec& v);
     void process_aetitle_dir(boost::filesystem::directory_entry d);
+    bool process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly);
+    
 public:
-    WatchDirs(const std::string &dName);
+    WatchDirs(const std::string &workingDir, const std::string &finalDir);
     
     bool runChecks();
 };
