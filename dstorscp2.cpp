@@ -416,10 +416,10 @@ OFCondition DcmStorageSCP::generateDirAndFilename(OFString &filename,
             if (dataset != NULL)
             {
                 // try to get the sending AE
-                if (getPeerAETitle() != "")
+                if (getCalledAETitle() != "")
                 {
                     OFOStringStream stream;
-                    stream << getPeerAETitle() << OFStringStream_ends;
+                    stream << getCalledAETitle() << OFStringStream_ends;
                     OFSTRINGSTREAM_GETSTR(stream, tmpString)
                     generatedDirName = tmpString;
                     OFSTRINGSTREAM_FREESTR(tmpString);

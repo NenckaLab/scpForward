@@ -15,6 +15,7 @@
 #include <iostream>
 #include <sstream>
 #include <fstream>
+#include <typeinfo>
 
 
 void exitWithError(const std::string &error);

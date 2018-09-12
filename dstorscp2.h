@@ -46,11 +46,11 @@
  *    Service Class Providers.
  */
 class DCMTK_DCMNET_EXPORT DcmStorageSCP
-  : public DcmSCP
+ : public DcmSCP
 {
 
   public:
-
+    
     // --- public types ---
 
     /** modes for generating subdirectories
