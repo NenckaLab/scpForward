@@ -95,7 +95,7 @@ void ProcConfigFile::parseLine(const std::string &line, size_t const lineNo)
         contents.clear();
     }
     else if (line.find('=') == line.npos)
-        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "\n");
+        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "\nEcho Line: " + line.c_str() + "\n");
     else if (!validLine(line))
         exitWithError("CFG: Bad format for line: " + Convert::T_to_string(lineNo) + "\n");
     else

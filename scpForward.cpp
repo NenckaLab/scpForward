@@ -1,8 +1,5 @@
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/ofstd/ofstring.h"
-//#include "dcmtk/dcmsr/dsrdoc.h"
-//#include "dcmtk/dcmdata/dcfilefo.h"
-//#include "dcmtk/dcmnet/dstorscp.h"
 #include "dstorscp2.h"
 #include <thread>
 #include <time.h>
@@ -45,13 +42,11 @@ void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
         //reset the timer
         start = time(0);
     }
+    printf("SCP listener has started");
 }
 
 void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
 {
-    //TODO - Port should be configurable
-    //myListener->setPort(11112);
-//    printf("%s\n", cfg->getValueOfKey<std::string>("port").c_str());
     myListener->setPort(stoi(cfg->getValueOfKey<std::string>("port")));
 //    printf("port set\n");
     myListener->setAETitle("ANY-SCP");
@@ -67,32 +62,28 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
     myListener->setDatasetStorageMode(DcmStorageSCP::DGM_StoreToFile);
     //myListener->setOutputDirectory("/Users/bswearingen/scpLT/Output/");
     myListener->setOutputDirectory(OFString((cfg->getValueOfKey<std::string>("output_dir")).c_str()));
-//    printf("outdir set\n");
     myListener->setDirectoryGenerationMode(DcmStorageSCP::DGM_AEName);
     myListener->setConnectionBlockingMode(DUL_NOBLOCK);
     //not really a timeout how I'm using it. More of a check for shutdown command frequency.
     myListener->setConnectionTimeout(5);
     
     OFCondition status;
-    //status = myListener->loadAssociationConfiguration("/Users/bswearingen/scpLT/storescp2.cfg", "Default");
     status = myListener->loadAssociationConfiguration(OFString((cfg->getValueOfKey<std::string>("assoc_config")).c_str()), "Default");
-//    printf("assoc set\n");
-//    printf("status\n");
-    printf("%s\n", status.text());
+    printf("SCP config load status: %s\n", status.text());
 }
 
 ConfigFile getConfig()
 {
     //TODO - change this to the directory this is launched from.
     ConfigFile temp("/Users/bswearingen/scpForward/config.cfg");
+    //ConfigFile temp("config.cfg");
     return temp;
 }
 
 void startDirectoryWatch(ConfigFile *cfg)
 {
-    //TODO - would be better if the while loop captured the SCP listener running.
     //TODO - need a way to capture and restart a fail.
-    WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"));
+    WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.runChecks();
@@ -102,16 +93,7 @@ void startDirectoryWatch(ConfigFile *cfg)
 
 int main(int /*argc*/, char * /*argv*/ [])
 {
-    //I'll need to set keep running to true here
-    
-    //Thread 0
-    //Need an external way to change part of this.
-    //who to email, whether or not to keep running, etc
     ConfigFile cfg = getConfig();
-//    ConfigFile cfg = ConfigFile(); //loadConfig();
-//    std::thread cfgThread(watchConfig, &cfg);
-//    printf("Config thread started\n");
-//    sleep(2);
     
     //Thread 1
     DcmStorageSCP myListener; // = DcmSCP();
@@ -124,25 +106,18 @@ int main(int /*argc*/, char * /*argv*/ [])
     printf("directory watch has launched.\n");
     
     //Thread 3
+    //incorporated into thread 2
     //watch all subfolders
     //email on a regular basis about unhandled files
     //email on a regular basis about folders without an appropriate .[some appropriate name here] files
     //email any data keys on a regular basis
-
-    
-    //testing purposes for now
-    sleep(3);
-    //need a way to update this while running
-    //printf("%s\n", ((cfg.getValueOfKey<std::string>("keep_running")) == "True")?"True":"False");
-    
     
     //TODO - The future logic that watches cfg for updates will need to map back to this location in myListener.
     //Do I really need to turn off both?
-    cfg.updateKey("keep_running", "False");
-    myListener.setStopRunning(OFTrue);
-    
-    printf("stop running should now be active\n");
-    //printf("%s\n", ((cfg.getValueOfKey<std::string>("keep_running")) == "True")?"True":"False");
+//    sleep(12);
+//    cfg.updateKey("keep_running", "False");
+//    myListener.setStopRunning(OFTrue);
+//    printf("stop running should now be active\n");
     
 //    cfgThread.join();
     scp.join();

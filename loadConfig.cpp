@@ -6,6 +6,7 @@
 //
 
 #include "loadConfig.h"
+#include <boost/algorithm/string.hpp>
 
 
 template <>
@@ -53,8 +54,11 @@ bool ConfigFile::validLine(const std::string &line) const
 void ConfigFile::extractKey(std::string &key, size_t const &sepPos, const std::string &line) const
 {
     key = line.substr(0, sepPos);
-    if (key.find('\t') != line.npos || key.find(' ') != line.npos)
-        key.erase(key.find_first_of("\t "));
+    std::string temp = key;
+    boost::trim(temp);
+    key = temp;
+    if (key.find('\t') != line.npos)
+        key.erase(key.find_first_of("\t"));
 }
 void ConfigFile::extractValue(std::string &value, size_t const &sepPos, const std::string &line) const
 {
@@ -76,13 +80,13 @@ void ConfigFile::extractContents(const std::string &line)
     if (!keyExists(key))
         contents.insert(std::pair<std::string, std::string>(key, value));
     else
-        exitWithError("CFG: Can only have unique key names!\n");
+        exitWithError("CFG: Can only have unique key names! " + key + " is a duplicate value " + value + "\n");
 }
 
 void ConfigFile::parseLine(const std::string &line, size_t const lineNo)
 {
     if (line.find('=') == line.npos)
-        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "\n");
+        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "   Echo Line: " + line.c_str() + "\n");
     
     if (!validLine(line))
         exitWithError("CFG: Bad format for line: " + Convert::T_to_string(lineNo) + "\n");
