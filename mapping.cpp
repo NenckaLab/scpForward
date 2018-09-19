@@ -12,7 +12,10 @@
 #include <boost/random.hpp>
 #include <boost/random/random_device.hpp>
 #include <boost/algorithm/string.hpp>
+#include <chrono>
+#include <thread>
 #include <random>
+#include <ctime>
 #include "mapping.hpp"
 #include "dcmtk/config/osconfig.h"
 #include "dcmtk/dcmnet/scu.h"
@@ -97,7 +100,7 @@ uint32_t crc32c(uint32_t crc, const char *buf, size_t len)
     return ~crc;
 }
 
-/* returns the Meta Info if the group is in the Meta Info,
+/* returns a pointer to the Meta Info if the group is in the Meta Info,
  * and the rest of the Dataset if the group is not in the Meta Info
  */
 DcmItem* findItem(long group, DcmMetaInfo &mi, DcmDataset &ds)
@@ -305,8 +308,8 @@ bool Hash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
     status =di->findAndGetOFString(DcmTagKey(group, element), key);
     if(!status.good())
     {
-        printf("load failed on: %s\n", toString().c_str());
-        printf("    %s\n", status.text());
+        //printf("load failed on: %s\n", toString().c_str());
+        //printf("    %s\n", status.text());
         return false;
     }
     if(std::strcmp(method.c_str(), "date") == 0)
@@ -385,7 +388,7 @@ bool Hash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
         //just a md5 on the input string and then write back
         MD5 md5;
         char *uid = md5.digestString(strdup(key.c_str()));
-        printf("orig:%s   new:%s\n", key.c_str(), uid);
+        //printf("orig:%s   new:%s\n", key.c_str(), uid);
         status = di->putAndInsertString(DcmTagKey(group,element), uid);
     }
     else
@@ -564,6 +567,8 @@ bool Forward::Send(std::string fPath)
     /* Negotiate Association */
     
     /* Initialize network */
+    time_t now = time(0);
+    printf("Sending: %s\n", ctime(&now) );
     OFCondition result = scu.initNetwork();
     if (result.bad())
     {
@@ -591,7 +596,7 @@ bool Forward::Send(std::string fPath)
     T_ASC_PresentationContextID presID = findUncompressedPC(UID_MRImageStorage, scu);
     if(presID == 0)
     {
-        printf("There is no uncompressed presentation context for Study Root FIND\n");
+        printf("There is no uncompressed presentation context for Study Root MRImageStorage\n");
         printf("%s\n", reinterpret_cast<char *>(presID));
         return 1;
     }
@@ -754,13 +759,18 @@ bool mapping::apply(std::string targetFile)
     }
     for(auto h:hset)
     {
-        //printf("hash: %s\n", h.toString().c_str());
         h.updateDCM(*metainfo, *dataset);
     }
+    //TODO - test just sending the dataset directly
     fileformat.saveFile("test.dcm");
     for(auto f = fset.begin(); f != fset.end(); ++f)
     {
         f->Send("test.dcm");
+        //give a small delay, we can overwhelm XNAT if we send to quickly
+        //a small delay will have neglible impact on one session, maybe add a few seconds
+        //but, will give significant time for XNAT to sort through things when sending
+        //1000s of files.
+        std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
     return true;
 }

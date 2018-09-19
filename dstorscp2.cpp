@@ -338,7 +338,9 @@ void DcmStorageSCP::notifyInstanceStored(const OFString &filename,
                                          DcmDataset * /*dataset*/) const
 {
     // by default, output some useful information
-    DCMNET_INFO("Stored received object to file: " << filename);
+    time_t now = time(0);
+//    printf("Sending: %s\n", ctime(&now) );
+    DCMNET_INFO("Stored received object to file: " << filename << "  " << ctime(&now));
 }
 
 

@@ -74,9 +74,8 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
 
 ConfigFile getConfig()
 {
-    //TODO - change this to the directory this is launched from.
-    ConfigFile temp("/Users/bswearingen/scpForward/config.cfg");
-    //ConfigFile temp("config.cfg");
+    //ConfigFile temp("/Users/bswearingen/scpForward/config.cfg");
+    ConfigFile temp("config.cfg");
     return temp;
 }
 
@@ -105,12 +104,6 @@ int main(int /*argc*/, char * /*argv*/ [])
     std::thread dwatch(startDirectoryWatch, &cfg);
     printf("directory watch has launched.\n");
     
-    //Thread 3
-    //incorporated into thread 2
-    //watch all subfolders
-    //email on a regular basis about unhandled files
-    //email on a regular basis about folders without an appropriate .[some appropriate name here] files
-    //email any data keys on a regular basis
     
     //TODO - The future logic that watches cfg for updates will need to map back to this location in myListener.
     //Do I really need to turn off both?

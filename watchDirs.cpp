@@ -68,10 +68,6 @@ void WatchDirs::fireEmails(const std::string &to, const std::string &cc, int hou
             sendmail(to.c_str(), adminEmail.c_str(), "Issue with SCP Forwarding folder.", message.c_str());
             it->second = time(0);
         }
-//        else
-//        {
-//            printf(" %f                     \n", hours);
-//        }
     }
     else
     {
@@ -144,7 +140,7 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
                 //apply the config file
                 if(myMappings.apply(i->path().c_str()))
                 {
-                    printf("Mappings applied\n");
+                    //printf("Mappings applied\n");
                     //move the original file to the completed directory
                     boost::filesystem::path p(*i);
                     std::string test = p.c_str();
@@ -200,10 +196,18 @@ bool WatchDirs::runChecks()
     read_directory(path , v);
     for (auto i = v.begin(); i != v.end(); ++i)
     {
-        //boost::filesystem::path temp(*i);
         if(exists(*i) && is_directory(*i)){
-            //we should have some exclusions here
-            process_aetitle_dir(*i);
+            //try so the entire thread doesn't collapse from a bad config file.
+            //extra delay on a fail, just so the system doesn't hammer a bad config quite as fast.
+            try {
+                process_aetitle_dir(*i);
+            } catch (const std::exception& e) {
+                printf("Error in directory: %s\n    %s\n", i->path().c_str(), e.what());
+                sleep(10);
+            } catch (...) {
+                printf("Undefined exception caught in directory watch.\n");
+                sleep(10);
+            }
         }
     }
     return true;

@@ -18,7 +18,7 @@
 #include <typeinfo>
 
 
-void exitWithError(const std::string &error);
+//void exitWithError(const std::string &error);
 
 class Convert
 {
@@ -40,8 +40,8 @@ public:
         std::istringstream istr(val);
         T returnVal;
         if (!(istr >> returnVal))
-            exitWithError("CFG: Not a valid " + (std::string)typeid(T).name() + " received!\n");
-        
+            //exitWithError("CFG: Not a valid " + (std::string)typeid(T).name() + " received!\n");
+            throw std::runtime_error("CFG: Not a valid " + (std::string)typeid(T).name() + " received!\n");
         return returnVal;
     }
 };

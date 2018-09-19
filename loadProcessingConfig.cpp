@@ -6,7 +6,9 @@
 //
 
 #include "loadProcessingConfig.h"
+//for convert, need to clean up
 #include "loadConfig.h"
+#include <exception>
 
 /*
  priority handled by where it is in the file, top has highest
@@ -95,11 +97,17 @@ void ProcConfigFile::parseLine(const std::string &line, size_t const lineNo)
         contents.clear();
     }
     else if (line.find('=') == line.npos)
-        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "\nEcho Line: " + line.c_str() + "\n");
+    {
+        throw std::runtime_error("CFG: No separator on line " + Convert::T_to_string(lineNo) + ": " + line);
+    }
     else if (!validLine(line))
-        exitWithError("CFG: Bad format for line: " + Convert::T_to_string(lineNo) + "\n");
+    {
+        throw std::runtime_error("CFG: Bad format for line " + Convert::T_to_string(lineNo));
+    }
     else
+    {
         extractContents(line);
+    }
 }
 
 void ProcConfigFile::ExtractKeys()
@@ -107,7 +115,7 @@ void ProcConfigFile::ExtractKeys()
     std::ifstream file;
     file.open(fName.c_str());
     if (!file)
-        exitWithError("CFG: File " + fName + " couldn't be found!\n");
+        throw std::runtime_error("CFG: File " + fName + " couldn't be found!");
     
     std::string line;
     size_t lineNo = 0;
@@ -125,11 +133,6 @@ void ProcConfigFile::ExtractKeys()
         
         parseLine(temp, lineNo);
     }
-    
-    //so, I need to push each set. Also, need to return the vector.
-    //cs.push_back(contents);
-    
-    
     file.close();
 }
 //public:
