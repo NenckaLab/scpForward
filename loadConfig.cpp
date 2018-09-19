@@ -15,13 +15,13 @@ std::string Convert::string_to_T(std::string const &val)
     return val;
 }
 
-void exitWithError(const std::string &error)
-{
-    std::cout << error;
-    std::cin.ignore();
-    std::cin.get();
-    exit(EXIT_FAILURE);
-}
+//void exitWithError(const std::string &error)
+//{
+//    std::cout << error;
+//    std::cin.ignore();
+//    std::cin.get();
+//    exit(EXIT_FAILURE);
+//}
 
 //class ConfigFile
 //private:
@@ -80,16 +80,19 @@ void ConfigFile::extractContents(const std::string &line)
     if (!keyExists(key))
         contents.insert(std::pair<std::string, std::string>(key, value));
     else
-        exitWithError("CFG: Can only have unique key names! " + key + " is a duplicate value " + value + "\n");
+        //exitWithError("CFG: Can only have unique key names! " + key + " is a duplicate value " + value + "\n");
+        throw std::runtime_error("CFG: Can only have unique key names! " + key + " is a duplicate value " + value);
 }
 
 void ConfigFile::parseLine(const std::string &line, size_t const lineNo)
 {
     if (line.find('=') == line.npos)
-        exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "   Echo Line: " + line.c_str() + "\n");
+        //exitWithError("CFG: Couldn't find separator on line: " + Convert::T_to_string(lineNo) + "   Echo Line: " + line.c_str() + "\n");
+        throw std::runtime_error("CFG: No separator on line " + Convert::T_to_string(lineNo) + ": " + line);
     
     if (!validLine(line))
-        exitWithError("CFG: Bad format for line: " + Convert::T_to_string(lineNo) + "\n");
+        //exitWithError("CFG: Bad format for line: " + Convert::T_to_string(lineNo) + "\n");
+        throw std::runtime_error("CFG: Bad format for line " + Convert::T_to_string(lineNo));
     
     extractContents(line);
 }
@@ -99,7 +102,8 @@ void ConfigFile::ExtractKeys()
     std::ifstream file;
     file.open(fName.c_str());
     if (!file)
-        exitWithError("CFG: File " + fName + " couldn't be found!\n");
+        //exitWithError("CFG: File " + fName + " couldn't be found!\n");
+        throw std::runtime_error("CFG: File " + fName + " couldn't be found!");
     
     std::string line;
     size_t lineNo = 0;
@@ -139,37 +143,4 @@ void ConfigFile::updateKey(std::string key,std::string value)
         it->second = value;
     else
         contents.insert(std::pair<std::string, std::string>(key, value));
-//
-////    contents.at(key).replace(value);
-////    contents.find(key)->second = value;
-//    //contents[key] = value;
-//    contents.at(key) = value;
-////    contents.insert(std::pair<std::string, std::string>(key, value));
-//
-//    std::string key2, value2;
-//    key2 = "test";
-//    value2 = "test";
-//
-//    if (!keyExists(key))
-//        contents.insert(std::pair<std::string, std::string>(key2, value2));
 }
-
-//int main()
-//{
-//    ConfigFile cfg("config.cfg");
-//
-//    bool exists = cfg.keyExists("car");
-//    std::cout << "car key: " << std::boolalpha << exists << "\n";
-//    exists = cfg.keyExists("fruits");
-//    std::cout << "fruits key: " << exists << "\n";
-//
-//    std::string someValue = cfg.getValueOfKey<std::string>("mykey", "Unknown");
-//    std::cout << "value of key mykey: " << someValue << "\n";
-//    std::string carValue = cfg.getValueOfKey<std::string>("car");
-//    std::cout << "value of key car: " << carValue << "\n";
-//    double doubleVal = cfg.getValueOfKey<double>("double");
-//    std::cout << "value of key double: " << doubleVal << "\n\n";
-//
-//    std::cin.get();
-//    return 0;
-//}

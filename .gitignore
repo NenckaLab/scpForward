@@ -3,3 +3,5 @@ test/
 Output/
 dcmtk/
 
+.DS_Store
+.DS_Store
