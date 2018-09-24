@@ -538,18 +538,23 @@ Forward::Forward(std::string csvList)
 static Uint8 findUncompressedPC(const OFString& sopClass, DcmSCU& scu)
 {
     Uint8 pc;
-    pc = scu.findPresentationContextID(sopClass, UID_LittleEndianExplicitTransferSyntax);
+    
+    
+    pc = scu.findPresentationContextID(sopClass, UID_JPEGProcess14SV1TransferSyntax);
+    if(pc == 0)
+        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianExplicitTransferSyntax);
     if(pc ==0)
         pc = scu.findPresentationContextID(sopClass, UID_BigEndianExplicitTransferSyntax);
     if(pc == 0)
         pc = scu.findPresentationContextID(sopClass, UID_LittleEndianImplicitTransferSyntax);
     return pc;
 }
-bool Forward::Send(std::string fPath)
+bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
 {
     DcmSCU scu;
     OFFilename fn = OFFilename(fPath.c_str());
     OFList<OFString> ts;
+    OFList<OFString> ts2;
     Uint16 response;
     
     scu.setAETitle(AETitle.c_str());
@@ -557,13 +562,62 @@ bool Forward::Send(std::string fPath)
     scu.setPeerHostName(Dest.c_str());
     scu.setPeerPort(DestPort);
     /* Presentation context */
+    
+    
+//    ts.push_back(UID_JPEGLSLosslessTransferSyntax);
+//    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax);
     ts.push_back(UID_LittleEndianExplicitTransferSyntax);
     ts.push_back(UID_BigEndianExplicitTransferSyntax);
     ts.push_back(UID_LittleEndianImplicitTransferSyntax);
-    scu.addPresentationContext(UID_MRImageStorage, ts);
+//    ts.push_back(UID_DeflatedExplicitVRLittleEndianTransferSyntax );
+//    ts.push_back(UID_JPEGProcess1TransferSyntax    );
+//    ts.push_back(UID_JPEGProcess2_4TransferSyntax );
+//    ts.push_back(UID_JPEGProcess3_5TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess6_8TransferSyntax       );
+//    ts.push_back(UID_JPEGProcess7_9TransferSyntax );
+//    ts.push_back(UID_JPEGProcess10_12TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess11_13TransferSyntax );
+//    ts.push_back(UID_JPEGProcess14TransferSyntax    );
+//    ts.push_back(UID_JPEGProcess15TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess16_18TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess17_19TransferSyntax   );
+//    ts.push_back(UID_JPEGProcess20_22TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess21_23TransferSyntax   );
+//    ts.push_back(UID_JPEGProcess24_26TransferSyntax  );
+//    ts.push_back(UID_JPEGProcess25_27TransferSyntax   );
+//    ts.push_back(UID_JPEGProcess28TransferSyntax        );
+//    ts.push_back(UID_JPEGProcess29TransferSyntax         );
+//    ts.push_back(UID_JPEGLSLossyTransferSyntax    );
+//    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax );
+//    ts.push_back(UID_JPEG2000TransferSyntax        );
+//    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionLosslessOnlyTransferSyntax);
+//    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionTransferSyntax);
+//    ts.push_back(UID_JPIPReferencedTransferSyntax  );
+//    ts.push_back(UID_JPIPReferencedDeflateTransferSyntax);
+//    ts.push_back(UID_MPEG2MainProfileAtMainLevelTransferSyntax );
+//    ts.push_back(UID_MPEG2MainProfileAtHighLevelTransferSyntax );
+//    ts.push_back(UID_MPEG4HighProfileLevel4_1TransferSyntax);
+//    ts.push_back(UID_MPEG4BDcompatibleHighProfileLevel4_1TransferSyntax);
+//    ts.push_back(UID_MPEG4HighProfileLevel4_2_For2DVideoTransferSyntax);
+//    ts.push_back(UID_MPEG4HighProfileLevel4_2_For3DVideoTransferSyntax);
+//    ts.push_back(UID_MPEG4StereoHighProfileLevel4_2TransferSyntax);
+//    ts.push_back(UID_HEVCMainProfileLevel5_1TransferSyntax);
+//    ts.push_back(UID_HEVCMain10ProfileLevel5_1TransferSyntax);
+//    ts.push_back(UID_RLELosslessTransferSyntax );
+//    ts.push_back(UID_RFC2557MIMEEncapsulationTransferSyntax);
+//    ts.push_back(UID_XMLEncodingTransferSyntax );
+//    ts.push_back(UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax);
+    //scu.addPresentationContext(UID_MRImageStorage, ts);
+    OFString seed;
+    mi.findAndGetOFString(DCM_TransferSyntaxUID, seed);
+    printf("%s\n", seed.c_str());
+    ts2.push_back(seed);
+    scu.addPresentationContext(UID_MRImageStorage, ts2);
+    
     scu.addPresentationContext(UID_FINDStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_VerificationSOPClass, ts);
+    scu.setDatasetConversionMode(OFTrue);
     /* Negotiate Association */
     
     /* Initialize network */
@@ -600,7 +654,6 @@ bool Forward::Send(std::string fPath)
         printf("%s\n", reinterpret_cast<char *>(presID));
         return 1;
     }
-    
     scu.sendSTORERequest(presID, fn, 0, response);
     //scu.closeAssociation(DCMSCU_RELEASE_ASSOCIATION);
     scu.releaseAssociation();
@@ -765,7 +818,7 @@ bool mapping::apply(std::string targetFile)
     fileformat.saveFile("test.dcm");
     for(auto f = fset.begin(); f != fset.end(); ++f)
     {
-        f->Send("test.dcm");
+        f->Send("test.dcm", *metainfo);
         //give a small delay, we can overwhelm XNAT if we send to quickly
         //a small delay will have neglible impact on one session, maybe add a few seconds
         //but, will give significant time for XNAT to sort through things when sending

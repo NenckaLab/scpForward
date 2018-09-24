@@ -137,7 +137,7 @@ private:
 public:
     Forward(std::string AETitle, std::string Dest, unsigned short DestPort);
     Forward(std::string csvList);
-    bool Send(std::string fPath);
+    bool Send(std::string fPath, DcmMetaInfo &mi);
     std::string toString();
 };
 
