@@ -22,7 +22,7 @@
 #include "loadConfig.h"
 #include "md5.h"
 
-//lots of helper functions used throughout these data types
+//helper functions used throughout these data types
 std::string splitOnChar(std::string &stToParse, char splitter)
 {
     size_t sepPos = stToParse.find(splitter);
@@ -98,96 +98,6 @@ uint32_t crc32c(uint32_t crc, const char *buf, size_t len)
             crc = crc & 1 ? (crc >> 1) ^ POLY : crc >> 1;
     }
     return ~crc;
-}
-
-static void hashUID(char* uid, OFString key)
-{
-    //calculate a new uid
-    //massive modify of dcmGenerateUniqueIdentifier
-    char buf[128]; /* be very safe */
-    //char uid[100];
-    uint32_t crc = 0;
-    uid[0] = '\0'; /* initialise */
-    /* On 64-bit Linux, the "32-bit identifier" returned by gethostid() is
-     sign-extended to a 64-bit long, so we need to blank the upper 32 bits */
-    long hostIdentifier = OFstatic_cast(unsigned long, gethostid() & 0xffffffff);
-    addUIDComponent(uid, SITE_INSTANCE_UID_ROOT);
-    sprintf(buf, ".%lu", hostIdentifier);
-    addUIDComponent(uid, buf);
-    //use the initial UID to seed the rest of the new one
-    //crc = crc32c(crc, const unsigned char *buf, size_t len);
-    crc = crc32c(crc, key.c_str(), key.length());
-    sprintf(buf, ".%u", crc);
-    addUIDComponent(uid, buf);
-}
-
-static void hashItem(char* buf, OFString key, std::string method, OFString seed)
-{
-    //OFString key;
-    OFCondition status;
-    uint32_t crc = 0;
-    const time_t ONE_DAY = 24 * 60 * 60;
-    const int OFFSET = 1;
-    
-    if(std::strcmp(method.c_str(), "date") == 0)
-    {
-        //first, get subjid - 10,10 in the ds
-        OFString seed;
-        MD5 md5;
-        struct tm tm;
-        //lots of funky stuff going on, strdup converts const char* to a char*, * dereferences so I can do binary ops
-        //only keep bits 0x0000 1010 (0 to 10), which we'll make into +1 to 11 days
-        crc = (*md5.digestString(strdup(seed.c_str())) & 0x0A);
-        //adjust date - convert key to a date
-        //need to clear this or you get underfined results
-        memset(&tm, 0, sizeof(struct tm));
-        strptime(key.c_str(), "%Y%m%d", &tm);
-        time_t newSecs = mktime(&tm) + (((int)crc + OFFSET) * ONE_DAY);
-        //        const struct tm *newDay = localtime(&newSecs);
-        //        strftime(buf, 9, "%Y%m%d", newDay);
-        strftime(buf, 9, "%Y%m%d", localtime(&newSecs));
-        //TODO - special case, birthdate?, if over 90
-    }
-    else if(std::strcmp(method.c_str(), "uid") == 0)
-    {
-        hashUID(buf, key);
-    }
-    else if(std::strcmp(method.c_str(), "time") == 0)
-    {
-        //make it noon
-        buf = strdup("120000.000000");
-    }
-    else if(std::strcmp(method.c_str(), "datetime") == 0)
-    {
-        //see "date" for general notes
-        OFString seed;
-        MD5 md5;
-        struct tm tm;
-        crc = (*md5.digestString(strdup(seed.c_str())) & 0x0A);
-        memset(&tm, 0, sizeof(struct tm));
-        std::string s(key.c_str());
-        std::string temp = splitOnChar(s, '.');
-        strptime(temp.c_str(), "%Y%m%d%H%M%S", &tm);
-        tm.tm_hour = 12;
-        tm.tm_min = 0;
-        tm.tm_sec = 0;
-        time_t newSecs = mktime(&tm) + (((int)crc + OFFSET) * ONE_DAY);
-        strftime(buf, 13, "%Y%m%d%H%M%S", localtime(&newSecs));
-    }
-    else if(std::strcmp(method.c_str(), "other") == 0)
-    {
-        //just a md5 on the input string and then write back
-        MD5 md5;
-        buf = md5.digestString(strdup(key.c_str()));
-    }
-    else
-    {
-        //TODO
-        //not sure yet, might be the same as none
-        //hmmm, maybe, it does a crc with the method as the start value?
-        //crc = crc32c(crc, key.c_str(), key.length());
-        strcpy(buf, key.c_str());
-    }
 }
 
 /* returns a pointer to the Meta Info if the group is in the Meta Info,
@@ -341,6 +251,7 @@ Delete::Delete(long p_group, long p_element): group(p_group), element(p_element)
 Delete::Delete(std::string csvList)
 {
     long group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+    //note: splitOnChar will handle the special case of clearing a dcmkey by passing in no value
     long element = std::strtol(csvList.c_str(), NULL, 16);
     *this=Delete(group, element);
 }
@@ -401,8 +312,9 @@ bool Hash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
         //printf("    %s\n", status.text());
         return false;
     }
-    if(key.length() == 0)
+    if(std::strcmp(key.c_str(), ""))
     {
+        printf("blank key, no change needed\n");
         //make no change to blank keys
         return true;
     }
@@ -430,24 +342,23 @@ bool Hash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
     }
     else if(std::strcmp(method.c_str(), "uid") == 0)
     {
+        //calculate a new uid
+        //massive modify of dcmGenerateUniqueIdentifier
+        char buf[128]; /* be very safe */
         char uid[100];
-        hashUID(uid, key);
-//        //calculate a new uid
-//        //massive modify of dcmGenerateUniqueIdentifier
-//        char buf[128]; /* be very safe */
-//        char uid[100];
-//        uid[0] = '\0'; /* initialise */
-//        /* On 64-bit Linux, the "32-bit identifier" returned by gethostid() is
-//         sign-extended to a 64-bit long, so we need to blank the upper 32 bits */
-//        long hostIdentifier = OFstatic_cast(unsigned long, gethostid() & 0xffffffff);
-//        addUIDComponent(uid, SITE_INSTANCE_UID_ROOT);
-//        sprintf(buf, ".%lu", hostIdentifier);
-//        addUIDComponent(uid, buf);
-//        //use the initial UID to seed the rest of the new one
-//        //crc = crc32c(crc, const unsigned char *buf, size_t len);
-//        crc = crc32c(crc, key.c_str(), key.length());
-//        sprintf(buf, ".%u", crc);
-//        addUIDComponent(uid, buf);
+        uid[0] = '\0'; /* initialise */
+        /* On 64-bit Linux, the "32-bit identifier" returned by gethostid() is
+         sign-extended to a 64-bit long, so we need to blank the upper 32 bits */
+        long hostIdentifier = OFstatic_cast(unsigned long, gethostid() & 0xffffffff);
+        addUIDComponent(uid, SITE_INSTANCE_UID_ROOT);
+        sprintf(buf, ".%lu", hostIdentifier);
+        addUIDComponent(uid, buf);
+        //use the initial UID to seed the rest of the new one
+        //crc = crc32c(crc, const unsigned char *buf, size_t len);
+        crc = crc32c(crc, key.c_str(), key.length());
+        sprintf(buf, ".%u", crc);
+        addUIDComponent(uid, buf);
+//printf("orig:%s   new:%s\n", key.c_str(), uid);
         //write back the new UID
         status = di->putAndInsertString(DcmTagKey(group,element), uid);
     }
@@ -501,112 +412,13 @@ std::string Hash::toString(){return ("Hash- Group: "+std::to_string(group)+"   E
 
 
 
-SeqHash::SeqHash(long p_group, long p_element, std::string p_method):group(p_group),element(p_element)
-{
-    if (std::find(std::begin(myValidEntries), std::end(myValidEntries), p_method) != std::end(myValidEntries))
-        method = std::move(p_method);
-    else
-        method = "none";
-    std::cout<<toString()<<std::endl;
-}
-SeqHash::SeqHash(std::string csvList)
-{
-    long group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
-    long element = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
-    std::string method = csvList;
-    *this=SeqHash(group, element, method);
-}
-bool SeqHash::updateDCM(std::string fPath)
-{
-    DcmFileFormat fileformat;
-    if (fileformat.loadFile(fPath.c_str()).good())
-    {
-        DcmDataset *dataset = fileformat.getDataset();
-        DcmMetaInfo *metainfo = fileformat.getMetaInfo();
-        bool status = updateDCM(*metainfo, *dataset);
-        fileformat.saveFile("temp.dcm");
-        return status;
-    }
-    return false;
-}
-bool SeqHash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
-{
-    DcmStack stack;
-    DcmObject *dobj = NULL;
-    DcmTagKey tag;
-    OFCondition status = ds.nextObject(stack, OFTrue);
-    
-    char buf[100];
-    OFString seed;
-    OFString key;
-    ds.findAndGetOFString(DCM_PatientID, seed);
-    
-    while(status.good())
-    {
-        dobj = stack.top();
-        tag = dobj->getTag();
-        if( (tag.getGroup()==group) && (tag.getElement()==element) )
-        {
-            std::cout<<"in modification"<<std::endl;
-            dobj->print(std::cout);
-//            DcmItem *di = (DcmItem*)dobj; //findItem(group, mi, ds);
-//            std::cout<<"as DcmItem"<<std::endl;
-//            di->print(std::cout);
-//            //load the new value into the buffer - finding the group/element here is
-//            //superficial, we should only have one tag in di
-//            di->findAndGetOFString(DcmTagKey(group, element), key);
-//            std::cout<<key<<std::endl;
-//            hashItem(buf, key, method, seed);
-//            //stack.pop();
-//            //delete ((DcmItem *)(stack.top()))->remove(dobj);
-//            //put the returned buffer into the item
-//            std::cout<<"attempting to write   "<<buf<<std::endl;
-//            status = di->putAndInsertString(DcmTagKey(group,element), buf);
-            
-            DcmElement *di = (DcmElement*)dobj; //findItem(group, mi, ds);
-            std::cout<<"as DcmElement"<<std::endl;
-            di->print(std::cout);
-            //load the new value into the buffer - finding the group/element here is
-            //superficial, we should only have one tag in di
-            di->getOFString(key,0);
-            std::cout<<key<<std::endl;
-            hashItem(buf, key, method, seed);
-            //stack.pop();
-            //delete ((DcmItem *)(stack.top()))->remove(dobj);
-            //put the returned buffer into the item
-            std::cout<<"attempting to write   "<<buf<<std::endl;
-            status = di->putOFStringArray(buf);
-            
-            
-            
-        }
-        status = ds.nextObject(stack, OFTrue);
-    }
-    //should be able to return status.good();
-    return status.good();
-}
-std::string SeqHash::toString(){return ("Hash- Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   Method: "+method);}
-
-
-
-
-
-
-
-
-
-
-
-KeyMap::KeyMap(long p_group, long p_element, std::string p_fMapName, std::string p_token):group(p_group),element(p_element),fMapName(std::move(p_fMapName)),token(std::move(p_token)){}
+KeyMap::KeyMap(long p_group, long p_element, std::string p_fMapName):group(p_group),element(p_element),fMapName(std::move(p_fMapName)){}
 KeyMap::KeyMap(std::string csvList)
 {
     long group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
     long element = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
-    //for general case where token isn't provided, this will consume the rest of the string and token will be ''
-    std::string value = splitOnChar(csvList, ',');
-    //std::string value = csvList;
-    std::string token = csvList;
-    *this=KeyMap(group, element, value, token);
+    std::string value = csvList;
+    *this=KeyMap(group, element, value);
 }
 std::string KeyMap::getMapPath(std::string fPath)
 {
@@ -640,50 +452,23 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
         char uid[UID_SIZE + 1];
         uid[UID_SIZE] = '\0';
         //determine the new value -
-        if(key.length() == 0)
+        //if fmappath has an entry, use that
+        if(std::strcmp(key.c_str(), ""))
         {
+            printf("blank key, no change needed\n");
             //make no change to blank keys and indicate success
             return true;
         }
         else if (myKeyMapping.keyExists(key.c_str()))
         {
-            //if the mapping has an entry, use that
             std::strncpy(uid, myKeyMapping.getValueOfKey<std::string>(key.c_str()).c_str(), UID_SIZE);
         }
         else
         {
-            //if leading chars are fixed
-            std::cout<<"token: "<<token<<"   "<<token.length()<<std::endl;
-            if(token.length() != 0)
-            {
-                int a = 0;
-                while(a < 9999)
-                {
-                    std::cout<<"testing: " <<a<<"\n"<<std::endl;
-                    std::stringstream test;
-                    test<<std::setw(4) << std::setfill('0')<<a;
-                    std::string test1 = token + test.str();
-                    std::cout<<test1<<std::endl;
-                    if(myKeyMapping.valueExists(test1))
-                    {
-                        a++;
-                    }
-                    else
-                    {
-                        std::strcpy(uid, test1.c_str()); //, UID_SIZE);
-                        std::cout<<"copied to uid: "<<uid<<std::endl;
-                        break;
-                    }
-                }
-            }
-            else
-            {
-                //otherwise, generate a string and map the pair in fmappath, save fmappath
-                //dcmGenerateUniqueIdentifier(uid, SITE_SERIES_UID_ROOT);
-                std::strncpy(uid, randomString(UID_SIZE).c_str(), UID_SIZE);
-                //boost::filesystem::ofstream outfile(mapPath, std::ios_base::app);
-            }
-            std::cout<<"here"<<std::endl;
+            //otherwise, generate a string and map the pair in fmappath, save fmappath
+            //dcmGenerateUniqueIdentifier(uid, SITE_SERIES_UID_ROOT);
+            std::strncpy(uid, randomString(UID_SIZE).c_str(), UID_SIZE);
+            //boost::filesystem::ofstream outfile(mapPath, std::ios_base::app);
             std::ofstream outfile(mapPath, std::ios_base::app);
             outfile<<key << "=" << uid <<std::endl;
             outfile.close();
@@ -707,7 +492,7 @@ bool KeyMap::updateDCM(std::string fPath)
     }
     return false;
 }
-std::string KeyMap::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   Value: "+fMapName + "    Token: " + token);}
+std::string KeyMap::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   Value: "+fMapName);}
 
 
 
@@ -761,23 +546,24 @@ Forward::Forward(std::string csvList)
     std::string aetitle = csvList;
     *this=Forward(aetitle, addr, port);
 }
-////TODO - should probably clean this up a bit and make it a private function of Forward
-//static Uint8 findUncompressedPC(const OFString& sopClass, DcmSCU& scu)
-//{
-//    Uint8 pc;
-//    pc = scu.findPresentationContextID(sopClass, UID_JPEGProcess14SV1TransferSyntax);
-//    if(pc == 0)
-//        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianExplicitTransferSyntax);
-//    if(pc ==0)
-//        pc = scu.findPresentationContextID(sopClass, UID_BigEndianExplicitTransferSyntax);
-//    if(pc == 0)
-//        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianImplicitTransferSyntax);
-//    return pc;
-//}
-static Uint8 findAnyPc(const OFString& sopClass, DcmSCU& scu, OFString& ts)
+//TODO - should probably clean this up a bit and make it a private function of Forward
+static Uint8 findUncompressedPC(const OFString& sopClass, DcmSCU& scu)
 {
     Uint8 pc;
-    pc = scu.findPresentationContextID(sopClass, ts);
+    
+    
+    printf("  Poll for pc to return\n");
+    pc = scu.findPresentationContextID(sopClass, UID_JPEGProcess14SV1TransferSyntax);
+    printf("  Value after poll 1: %d\n", pc);
+    if(pc == 0)
+        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianExplicitTransferSyntax);
+    printf("  Value after poll 2: %d\n", pc);
+    if(pc ==0)
+        pc = scu.findPresentationContextID(sopClass, UID_BigEndianExplicitTransferSyntax);
+    printf("  Value after poll 3: %d\n", pc);
+    if(pc == 0)
+        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianImplicitTransferSyntax);
+    printf("  Value after poll 4: %d\n", pc);
     return pc;
 }
 bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
@@ -839,16 +625,11 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
 //    ts.push_back(UID_XMLEncodingTransferSyntax );
 //    ts.push_back(UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax);
     //scu.addPresentationContext(UID_MRImageStorage, ts);
-    
-    //add the presentation context per the dicom
-    //should update to better names
     OFString seed;
-    OFString seed2;
     mi.findAndGetOFString(DCM_TransferSyntaxUID, seed);
-    mi.findAndGetOFString(DCM_MediaStorageSOPClassUID, seed2);
+    printf("%s\n", seed.c_str());
     ts2.push_back(seed);
-    scu.addPresentationContext(seed2, ts2);
-    //scu.addPresentationContext(UID_MRImageStorage, ts2);
+    scu.addPresentationContext(UID_MRImageStorage, ts2);
     
     scu.addPresentationContext(UID_FINDStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
@@ -883,15 +664,27 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
         return 1;
     }
     
-    //verify presentation context, mostly trivial at this point
-    //T_ASC_PresentationContextID presID = findUncompressedPC(UID_MRImageStorage, scu);
-    T_ASC_PresentationContextID presID = findAnyPc(seed2, scu, seed);
-
+    //add printlines for verification, also in findUncompressedPC
+    //also look at leaving blank keys and hashes blank
+    printf("Start looking for presentation ID\n");
+    T_ASC_PresentationContextID presID = findUncompressedPC(UID_MRImageStorage, scu);
+    printf("Finish looking for presentation ID\n");
     if(presID == 0)
     {
-        printf("Unknown presentation context. %s : %s\n",seed.c_str(),seed2.c_str());
+        printf("There is no uncompressed presentation context for Study Root MRImageStorage\n");
+        printf("%s\n", reinterpret_cast<char *>(presID));
         return 1;
     }
+    printf("Finish error on presentation ID\n");
+    printf("Start looking for presentation ID\n");
+    
+    OFString seed2;
+    mi.findAndGetOFString(DCM_MediaStorageSOPClassUID, seed2);
+    scu.addPresentationContext(seed2, ts2);
+    T_ASC_PresentationContextID presID2 = findUncompressedPC(seed2, scu);
+    printf("Redefined pres ID %s\n", reinterpret_cast<char *>(presID2));
+    
+    
     
     scu.sendSTORERequest(presID, fn, 0, response);
     //scu.closeAssociation(DCMSCU_RELEASE_ASSOCIATION);
@@ -912,7 +705,6 @@ mapping::mapping(myMaps m)
     updateVec("hash", hset, m);
     updateVec("delete", dset, m);
     updateVec("sequence", sset, m);
-    updateVec("seqhash",shset, m);
     std::string k = "removePrivateTags";
     if ((m.find(k) != m.end()) && ((m.find(k)->second).begin()->compare("true") == 0))
     {
@@ -1051,10 +843,6 @@ bool mapping::apply(std::string targetFile)
         s.updateDCM(*metainfo, *dataset);
     }
     for(auto h:hset)
-    {
-        h.updateDCM(*metainfo, *dataset);
-    }
-    for(auto h:shset)
     {
         h.updateDCM(*metainfo, *dataset);
     }
