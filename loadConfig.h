@@ -70,6 +70,7 @@ public:
     ConfigFile(const std::string &fName);
     
     bool keyExists(const std::string &key) const;
+    bool valueExists(const std::string &val) const;
     
     void updateKey(std::string key, std::string value);
     

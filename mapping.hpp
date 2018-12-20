@@ -71,6 +71,21 @@ public:
     std::string toString();
 };
 
+class SeqHash
+{
+private:
+    long group;
+    long element;
+    std::string method;
+    std::vector<std::string> myValidEntries{"date", "uid", "time", "datetime", "other","none"};
+public:
+    SeqHash(long p_group, long p_element, std::string p_method);
+    SeqHash(std::string csvList);
+    bool updateDCM(std::string fPath);
+    bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds);
+    std::string toString();
+};
+
 class Delete
 {
 private:
@@ -106,8 +121,9 @@ private:
     long group;
     long element;
     std::string fMapName;
+    std::string token;
 public:
-    KeyMap(long group, long element, std::string fMapName);
+    KeyMap(long group, long element, std::string fMapName, std::string token);
     KeyMap(std::string csvList);
     bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath);
     bool updateDCM(std::string fPath);
@@ -153,6 +169,7 @@ private:
     typedef std::vector<Hash> hashes;
     typedef std::vector<Delete> deletes;
     typedef std::vector<Sequence> sequences;
+    typedef std::vector<SeqHash> sequencehash;
     
     //Or, we could reduce, but, that would significantly alter my order of operations
     qualifiers qset;
@@ -163,6 +180,7 @@ private:
     hashes hset;
     deletes dset;
     sequences sset;
+    sequencehash shset;
     
     bool rmvPrivateData = false;
     bool rmvCurveData = false;

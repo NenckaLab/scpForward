@@ -136,6 +136,21 @@ bool ConfigFile::keyExists(const std::string &key) const
     return contents.find(key) != contents.end();
 }
 
+bool ConfigFile::valueExists(const std::string &val) const
+{
+    std::cout<<"in sub"<<std::endl;
+    auto it = contents.begin();
+    while(it != contents.end())
+    {
+        if(it->second == val)
+        {
+            return true;
+        }
+        it++;
+    }
+    return false;
+}
+
 void ConfigFile::updateKey(std::string key,std::string value)
 {
     std::map<std::string, std::string>::iterator it = contents.find(key);
