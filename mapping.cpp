@@ -6,7 +6,10 @@
 //
 
 #include <stdio.h>
+#define BOOST_NO_CXX11_SCOPED_ENUMS
+//need BOOST_NO_CXX11_SCOPED_ENUMS to prevent bug on boost::filesystem::copy_file from showing up in Linux compiler
 #include <boost/filesystem.hpp>
+#undef BOOST_NO_CXX11_SCOPED_ENUMS
 #include <boost/archive/text_oarchive.hpp>
 #include <boost/generator_iterator.hpp>
 #include <boost/random.hpp>
@@ -507,7 +510,7 @@ SeqHash::SeqHash(long p_group, long p_element, std::string p_method):group(p_gro
         method = std::move(p_method);
     else
         method = "none";
-    std::cout<<toString()<<std::endl;
+//    std::cout<<toString()<<std::endl;
 }
 SeqHash::SeqHash(std::string csvList)
 {
@@ -547,8 +550,8 @@ bool SeqHash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
         tag = dobj->getTag();
         if( (tag.getGroup()==group) && (tag.getElement()==element) )
         {
-            std::cout<<"in modification"<<std::endl;
-            dobj->print(std::cout);
+//            std::cout<<"in modification"<<std::endl;
+//            dobj->print(std::cout);
 //            DcmItem *di = (DcmItem*)dobj; //findItem(group, mi, ds);
 //            std::cout<<"as DcmItem"<<std::endl;
 //            di->print(std::cout);
@@ -564,21 +567,18 @@ bool SeqHash::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
 //            status = di->putAndInsertString(DcmTagKey(group,element), buf);
             
             DcmElement *di = (DcmElement*)dobj; //findItem(group, mi, ds);
-            std::cout<<"as DcmElement"<<std::endl;
-            di->print(std::cout);
+//            std::cout<<"as DcmElement"<<std::endl;
+//            di->print(std::cout);
             //load the new value into the buffer - finding the group/element here is
             //superficial, we should only have one tag in di
             di->getOFString(key,0);
-            std::cout<<key<<std::endl;
+//            std::cout<<key<<std::endl;
             hashItem(buf, key, method, seed);
             //stack.pop();
             //delete ((DcmItem *)(stack.top()))->remove(dobj);
             //put the returned buffer into the item
-            std::cout<<"attempting to write   "<<buf<<std::endl;
+//            std::cout<<"attempting to write   "<<buf<<std::endl;
             status = di->putOFStringArray(buf);
-            
-            
-            
         }
         status = ds.nextObject(stack, OFTrue);
     }
@@ -653,17 +653,17 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
         else
         {
             //if leading chars are fixed
-            std::cout<<"token: "<<token<<"   "<<token.length()<<std::endl;
+//            std::cout<<"token: "<<token<<"   "<<token.length()<<std::endl;
             if(token.length() != 0)
             {
                 int a = 0;
                 while(a < 9999)
                 {
-                    std::cout<<"testing: " <<a<<"\n"<<std::endl;
+//                    std::cout<<"testing: " <<a<<"\n"<<std::endl;
                     std::stringstream test;
                     test<<std::setw(4) << std::setfill('0')<<a;
                     std::string test1 = token + test.str();
-                    std::cout<<test1<<std::endl;
+//                    std::cout<<test1<<std::endl;
                     if(myKeyMapping.valueExists(test1))
                     {
                         a++;
@@ -671,7 +671,7 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
                     else
                     {
                         std::strcpy(uid, test1.c_str()); //, UID_SIZE);
-                        std::cout<<"copied to uid: "<<uid<<std::endl;
+//                        std::cout<<"copied to uid: "<<uid<<std::endl;
                         break;
                     }
                 }
@@ -683,7 +683,7 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
                 std::strncpy(uid, randomString(UID_SIZE).c_str(), UID_SIZE);
                 //boost::filesystem::ofstream outfile(mapPath, std::ios_base::app);
             }
-            std::cout<<"here"<<std::endl;
+//            std::cout<<"here"<<std::endl;
             std::ofstream outfile(mapPath, std::ios_base::app);
             outfile<<key << "=" << uid <<std::endl;
             outfile.close();
@@ -756,6 +756,8 @@ Forward::Forward(std::string p_AETitle, std::string p_Dest, unsigned short p_Des
 :AETitle(std::move(p_AETitle)), Dest(std::move(p_Dest)),DestPort(p_DestPort){}
 Forward::Forward(std::string csvList)
 {
+    //TODO - can I reuse this structure for forwarding to another AETITLE?, add a method - r(aw), f(ormatted)(default)
+    //need to give this some thought.
     std::string addr = splitOnChar(csvList, ',');
     long port = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 10);
     std::string aetitle = csvList;
@@ -782,6 +784,7 @@ static Uint8 findAnyPc(const OFString& sopClass, DcmSCU& scu, OFString& ts)
 }
 bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
 {
+    //TODO - if I reuse as mentioned above, this will need to handle both methods
     DcmSCU scu;
     OFFilename fn = OFFilename(fPath.c_str());
     OFList<OFString> ts;
@@ -840,7 +843,7 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
 //    ts.push_back(UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax);
     //scu.addPresentationContext(UID_MRImageStorage, ts);
     
-    //add the presentation context per the dicom
+    //add the presentation context per the dicom header
     //should update to better names
     OFString seed;
     OFString seed2;
@@ -901,6 +904,60 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
 std::string Forward::toString(){return ("IP: "+Dest+"   Port: "+std::to_string(DestPort)+"   Value: "+AETitle);}
 
 
+
+
+
+AddtlProject::AddtlProject(std::string csvList)
+{
+    std::string method = splitOnChar(csvList, ',');
+    if(method == "tag"){
+        useTag=true;
+        group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+        element = std::strtol(csvList.c_str(), NULL, 16);
+        AETitle="";
+    }else{
+        useTag=false;
+        group=0;
+        element=0;
+        AETitle = splitOnChar(csvList, ',');
+    }
+}
+bool AddtlProject::Send(std::string fPath, DcmMetaInfo &mi, DcmDataset &ds )
+{
+    if(useTag){
+        //move the value from the tag into AETitle
+        OFCondition status;
+        OFString key;
+        DcmItem *di = findItem(group, mi, ds);
+        if(!di->findAndGetOFString(DcmTagKey(group, element), key).good()){
+            return false;
+        }
+        AETitle = key.c_str();
+    }
+    
+    //copy the raw file into the new AETitle folder
+    //build our new path
+    boost::filesystem::path source(fPath);
+    std::string destFile = source.filename().string();
+    std::string destPath = source.parent_path().parent_path().string();
+    destPath = destPath + "/" + AETitle;
+    if(!boost::filesystem::exists(destPath))
+    {
+        boost::filesystem::create_directories(destPath);
+    }
+    destPath = destPath + "/" + destFile;
+    boost::filesystem::path dest(destPath);
+    boost::filesystem::copy_file(source, dest); //, boost::filesystem::copy_option::overwrite_if_exists);
+    
+    //TODO - one small problem here. If the move fails, we repeatedly try to move forever.
+    return true;
+}
+std::string AddtlProject::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   or AETitle: "+AETitle);}
+
+
+
+
+
 mapping::mapping(myMaps m)
 {
     //create my vectors
@@ -909,6 +966,7 @@ mapping::mapping(myMaps m)
     updateVec("anon", aset, m);
     updateVec("key", kset, m);
     updateVec("forward", fset, m);
+    updateVec("projects", pset, m);
     updateVec("hash", hset, m);
     updateVec("delete", dset, m);
     updateVec("sequence", sset, m);
@@ -998,6 +1056,8 @@ void mapping::cleanAllOverlays(DcmDataset &ds)
 }
 bool mapping::apply(std::string targetFile)
 {
+    
+    
     DcmFileFormat fileformat;
     OFCondition status = fileformat.loadFile(targetFile.c_str());
     if (!status.good())
@@ -1013,6 +1073,11 @@ bool mapping::apply(std::string targetFile)
     {
         if(!q.passesTest(*metainfo, *dataset))
             return false;
+    }
+    //copy into any other projects it should be included in
+    for(auto p = pset.begin(); p != pset.end(); ++p)
+    {
+        p->Send(targetFile.c_str(), *metainfo, *dataset);
     }
     //passed all the qualifiers, apply all mappings
     if(rmvPrivateData)

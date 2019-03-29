@@ -157,6 +157,19 @@ public:
     std::string toString();
 };
 
+class AddtlProject
+{
+private:
+    long group;
+    long element;
+    std::string AETitle;
+    bool useTag;
+public:
+    AddtlProject(std::string csvList);
+    bool Send(std::string fPath, DcmMetaInfo &mi, DcmDataset &ds);
+    std::string toString();
+};
+
 class mapping
 {
 private:
@@ -166,6 +179,7 @@ private:
     typedef std::vector<KeyMap> keymaps;
     typedef std::vector<Anon> anons;
     typedef std::vector<Forward> forwards;
+    typedef std::vector<AddtlProject> projects;
     typedef std::vector<Hash> hashes;
     typedef std::vector<Delete> deletes;
     typedef std::vector<Sequence> sequences;
@@ -181,6 +195,7 @@ private:
     deletes dset;
     sequences sset;
     sequencehash shset;
+    projects pset;
     
     bool rmvPrivateData = false;
     bool rmvCurveData = false;
