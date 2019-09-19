@@ -15,22 +15,30 @@ std::string Convert::string_to_T(std::string const &val)
     return val;
 }
 
-//void exitWithError(const std::string &error)
-//{
-//    std::cout << error;
-//    std::cin.ignore();
-//    std::cin.get();
-//    exit(EXIT_FAILURE);
-//}
-
 //class ConfigFile
 //private:
 void ConfigFile::removeComment(std::string &line) const
 {
-    if (line.find(';') != line.npos)
-        line.erase(line.find(';'));
-    if (line.find('#') != line.npos)
-        line.erase(line.find('#'));
+    //find first equals sign
+    line = line.substr(line.find_first_not_of(" \t"));
+    std::size_t commentPos = line.find_first_of(";#");
+    std::size_t equalPos = line.find_first_of("=");
+    
+    if(commentPos != 0){
+        if(commentPos < equalPos){
+            //comment part of front of equation, find one after the = sign
+            commentPos = line.find_first_of(";#", equalPos);
+        }
+    }
+    if(commentPos != line.npos){
+        line = line.erase(commentPos);
+    }
+//    //TODO - if it isn't at the start, make sure that an = comes before it,
+//    //otherwise, if an = comes after, keep it.
+//    if (line.find(';') != line.npos)
+//        line.erase(line.find(';'));
+//    if (line.find('#') != line.npos)
+//        line.erase(line.find('#'));
 }
 
 bool ConfigFile::onlyWhitespace(const std::string &line) const
@@ -71,7 +79,7 @@ void ConfigFile::extractContents(const std::string &line)
 {
     std::string temp = line;
     temp.erase(0, temp.find_first_not_of("\t "));
-    size_t sepPos = temp.find('=');
+    size_t sepPos = temp.find_last_of('=');
     
     std::string key, value;
     extractKey(key, sepPos, temp);
@@ -138,7 +146,7 @@ bool ConfigFile::keyExists(const std::string &key) const
 
 bool ConfigFile::valueExists(const std::string &val) const
 {
-    std::cout<<"in sub"<<std::endl;
+    //std::cout<<"in sub"<<std::endl;
     auto it = contents.begin();
     while(it != contents.end())
     {

@@ -1,6 +1,7 @@
 //
 //  mapping.cpp
 //  dtest.exe
+//  Generic map tokens
 //
 //  Created by Brad Swearingen on 6/20/18.
 //
@@ -21,11 +22,10 @@
 #include <ctime>
 #include "mapping.hpp"
 #include "dcmtk/config/osconfig.h"
-#include "dcmtk/dcmnet/scu.h"
 #include "loadConfig.h"
 #include "md5.h"
 
-//lots of helper functions used throughout these data types
+//HELPER FUNCTIONS used throughout these data types
 std::string splitOnChar(std::string &stToParse, char splitter)
 {
     size_t sepPos = stToParse.find(splitter);
@@ -204,6 +204,11 @@ DcmItem* findItem(long group, DcmMetaInfo &mi, DcmDataset &ds)
     return di;
 }
 
+
+
+
+//ACTUAL MAP TOKENS
+
 //Qualifier datatype - I still think there's more I can abstract from these types
 Qualifier::Qualifier(long p_group, long p_element, std::string p_symbol, std::string p_value)
 : group(p_group), element(p_element),symbol(std::move(p_symbol)),value(std::move(p_value)){}
@@ -274,6 +279,9 @@ std::string Qualifier::toString()
     return ("Group: " + std::to_string(group) + "   Element: " + std::to_string(element) + "   Compare: "  + symbol + "   Value: " + value);
 }
 
+
+
+
 Modify::Modify(long p_group, long p_element, std::string p_value): group(p_group), element(p_element), value(std::move(p_value)){}
 Modify::Modify(std::string csvList)
 {
@@ -309,6 +317,9 @@ std::string Modify::toString()
     return ("Modify- Group: " + std::to_string(group) + "   Element: " + std::to_string(element) + "   Value: " + value);
 }
 
+
+
+
 Sequence::Sequence(long p_group, long p_element, long p_subgroup, long p_subelement, int p_loc, std::string p_value)
 :group(p_group), element(p_element), subgroup(p_subgroup), subelement(p_subelement), location(p_loc), value(std::move(p_value)){}
 Sequence::Sequence(std::string csvList)
@@ -340,6 +351,9 @@ std::string Sequence::toString()
             "   Location: " + std::to_string(location) + "   Value: " + value);
 }
 
+
+
+
 Delete::Delete(long p_group, long p_element): group(p_group), element(p_element){}
 Delete::Delete(std::string csvList)
 {
@@ -358,6 +372,9 @@ std::string Delete::toString()
 {
     return ("Delete-  Group: " + std::to_string(group) + "   Element: " + std::to_string(element));
 }
+
+
+
 
 Hash::Hash(long p_group, long p_element, std::string p_method):group(p_group),element(p_element)
 {
@@ -504,6 +521,7 @@ std::string Hash::toString(){return ("Hash- Group: "+std::to_string(group)+"   E
 
 
 
+
 SeqHash::SeqHash(long p_group, long p_element, std::string p_method):group(p_group),element(p_element)
 {
     if (std::find(std::begin(myValidEntries), std::end(myValidEntries), p_method) != std::end(myValidEntries))
@@ -590,14 +608,14 @@ std::string SeqHash::toString(){return ("Hash- Group: "+std::to_string(group)+" 
 
 
 
-
-
-
-
-
-
-
-KeyMap::KeyMap(long p_group, long p_element, std::string p_fMapName, std::string p_token):group(p_group),element(p_element),fMapName(std::move(p_fMapName)),token(std::move(p_token)){}
+KeyMap::KeyMap(long p_group, long p_element, std::string p_fMapName, std::string p_token, long p_groupSource, long p_elementSource):group(p_group), element(p_element),fMapName(std::move(p_fMapName)),token(std::move(p_token)),groupSource(p_groupSource),elementSource(p_elementSource){}
+KeyMap::KeyMap(long group, long element, std::string fMapName, std::string token)
+//:group(p_group),element(p_element),fMapName(std::move(p_fMapName)),token(std::move(p_token))
+{
+    *this=KeyMap(group, element, fMapName, token, group, element);
+//    groupSource = group;
+//    elementSource = element;
+}
 KeyMap::KeyMap(std::string csvList)
 {
     long group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
@@ -605,15 +623,24 @@ KeyMap::KeyMap(std::string csvList)
     //for general case where token isn't provided, this will consume the rest of the string and token will be ''
     std::string value = splitOnChar(csvList, ',');
     //std::string value = csvList;
-    std::string token = csvList;
-    *this=KeyMap(group, element, value, token);
+    std::string token = splitOnChar(csvList, ',');
+    long sourceGroup = std::strtol(splitOnChar(csvList,',').c_str(), NULL, 16);
+    long sourceElement = std::strtol(splitOnChar(csvList,',').c_str(),NULL,16);
+    if(sourceElement == 0){
+        sourceGroup = group;
+        sourceElement = element;
+    }
+    *this=KeyMap(group, element, value, token, sourceGroup, sourceElement);
 }
 std::string KeyMap::getMapPath(std::string fPath)
 {
     //returns the full path to the keymap associated with a file (will be the same for all files in a directory)
     //creates the keymap if needed
     boost::filesystem::path p(fPath);
-    std::string somepath = p.parent_path().string() + "/" + fMapName;
+    //kind of hacky. Really should force it to the same level as the config file.
+    //this is effectively the same, doing it this way to save a lot of pain now at the risk of future pain.
+    std::string somepath = p.parent_path().parent_path().string() + "/" + fMapName;
+    
     if(!boost::filesystem::exists(somepath))
     {
         //printf("create file here\n");
@@ -629,26 +656,29 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
     //load the keymapping
     ConfigFile myKeyMapping(mapPath);
     OFCondition status;
-    OFString key;
+    OFString key, keySource;
     DcmItem *di = findItem(group, mi, ds);
     static Uint8 UID_SIZE = 25;
-    if(di->findAndGetOFString(DcmTagKey(group, element), key).good())
+    if(di->findAndGetOFString(DcmTagKey(group, element), key).good() &&
+       di->findAndGetOFString(DcmTagKey(groupSource, elementSource), keySource).good())
     {
-        std::string temp = key.c_str();
+        std::string temp = keySource.c_str();
         boost::trim(temp);
-        key = temp.c_str();
+        keySource = temp.c_str();
         char uid[UID_SIZE + 1];
         uid[UID_SIZE] = '\0';
         //determine the new value -
-        if(key.length() == 0)
+        if(keySource.length() == 0)
         {
             //make no change to blank keys and indicate success
+            //TODO - this needs some cleaning up. Users will probably expect the
+            //destination key to change even if the source key is missing.
             return true;
         }
-        else if (myKeyMapping.keyExists(key.c_str()))
+        else if (myKeyMapping.keyExists(keySource.c_str()))
         {
             //if the mapping has an entry, use that
-            std::strncpy(uid, myKeyMapping.getValueOfKey<std::string>(key.c_str()).c_str(), UID_SIZE);
+            std::strncpy(uid, myKeyMapping.getValueOfKey<std::string>(keySource.c_str()).c_str(), UID_SIZE);
         }
         else
         {
@@ -685,10 +715,10 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
             }
 //            std::cout<<"here"<<std::endl;
             std::ofstream outfile(mapPath, std::ios_base::app);
-            outfile<<key << "=" << uid <<std::endl;
+            outfile<<keySource << "=" << uid <<std::endl;
             outfile.close();
         }
-        //update dicom and save
+        //update target in the dicom and save
         status = di->putAndInsertString(DcmTagKey(group,element), uid);
         return status.good();
     }
@@ -708,6 +738,7 @@ bool KeyMap::updateDCM(std::string fPath)
     return false;
 }
 std::string KeyMap::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   Value: "+fMapName + "    Token: " + token);}
+
 
 
 
@@ -752,158 +783,7 @@ std::string Anon::toString(){return ("Group: "+std::to_string(group)+"   Element
 
 
 
-Forward::Forward(std::string p_AETitle, std::string p_Dest, unsigned short p_DestPort)
-:AETitle(std::move(p_AETitle)), Dest(std::move(p_Dest)),DestPort(p_DestPort){}
-Forward::Forward(std::string csvList)
-{
-    //TODO - can I reuse this structure for forwarding to another AETITLE?, add a method - r(aw), f(ormatted)(default)
-    //need to give this some thought.
-    std::string addr = splitOnChar(csvList, ',');
-    long port = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 10);
-    std::string aetitle = csvList;
-    *this=Forward(aetitle, addr, port);
-}
-////TODO - should probably clean this up a bit and make it a private function of Forward
-//static Uint8 findUncompressedPC(const OFString& sopClass, DcmSCU& scu)
-//{
-//    Uint8 pc;
-//    pc = scu.findPresentationContextID(sopClass, UID_JPEGProcess14SV1TransferSyntax);
-//    if(pc == 0)
-//        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianExplicitTransferSyntax);
-//    if(pc ==0)
-//        pc = scu.findPresentationContextID(sopClass, UID_BigEndianExplicitTransferSyntax);
-//    if(pc == 0)
-//        pc = scu.findPresentationContextID(sopClass, UID_LittleEndianImplicitTransferSyntax);
-//    return pc;
-//}
-static Uint8 findAnyPc(const OFString& sopClass, DcmSCU& scu, OFString& ts)
-{
-    Uint8 pc;
-    pc = scu.findPresentationContextID(sopClass, ts);
-    return pc;
-}
-bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
-{
-    //TODO - if I reuse as mentioned above, this will need to handle both methods
-    DcmSCU scu;
-    OFFilename fn = OFFilename(fPath.c_str());
-    OFList<OFString> ts;
-    OFList<OFString> ts2;
-    Uint16 response;
-    
-    scu.setAETitle(AETitle.c_str());
-    scu.setPeerAETitle(AETitle.c_str());
-    scu.setPeerHostName(Dest.c_str());
-    scu.setPeerPort(DestPort);
-    /* Presentation context */
-    
-    
-//    ts.push_back(UID_JPEGLSLosslessTransferSyntax);
-//    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax);
-    ts.push_back(UID_LittleEndianExplicitTransferSyntax);
-    ts.push_back(UID_BigEndianExplicitTransferSyntax);
-    ts.push_back(UID_LittleEndianImplicitTransferSyntax);
-//    ts.push_back(UID_DeflatedExplicitVRLittleEndianTransferSyntax );
-//    ts.push_back(UID_JPEGProcess1TransferSyntax    );
-//    ts.push_back(UID_JPEGProcess2_4TransferSyntax );
-//    ts.push_back(UID_JPEGProcess3_5TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess6_8TransferSyntax       );
-//    ts.push_back(UID_JPEGProcess7_9TransferSyntax );
-//    ts.push_back(UID_JPEGProcess10_12TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess11_13TransferSyntax );
-//    ts.push_back(UID_JPEGProcess14TransferSyntax    );
-//    ts.push_back(UID_JPEGProcess15TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess16_18TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess17_19TransferSyntax   );
-//    ts.push_back(UID_JPEGProcess20_22TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess21_23TransferSyntax   );
-//    ts.push_back(UID_JPEGProcess24_26TransferSyntax  );
-//    ts.push_back(UID_JPEGProcess25_27TransferSyntax   );
-//    ts.push_back(UID_JPEGProcess28TransferSyntax        );
-//    ts.push_back(UID_JPEGProcess29TransferSyntax         );
-//    ts.push_back(UID_JPEGLSLossyTransferSyntax    );
-//    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax );
-//    ts.push_back(UID_JPEG2000TransferSyntax        );
-//    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionLosslessOnlyTransferSyntax);
-//    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionTransferSyntax);
-//    ts.push_back(UID_JPIPReferencedTransferSyntax  );
-//    ts.push_back(UID_JPIPReferencedDeflateTransferSyntax);
-//    ts.push_back(UID_MPEG2MainProfileAtMainLevelTransferSyntax );
-//    ts.push_back(UID_MPEG2MainProfileAtHighLevelTransferSyntax );
-//    ts.push_back(UID_MPEG4HighProfileLevel4_1TransferSyntax);
-//    ts.push_back(UID_MPEG4BDcompatibleHighProfileLevel4_1TransferSyntax);
-//    ts.push_back(UID_MPEG4HighProfileLevel4_2_For2DVideoTransferSyntax);
-//    ts.push_back(UID_MPEG4HighProfileLevel4_2_For3DVideoTransferSyntax);
-//    ts.push_back(UID_MPEG4StereoHighProfileLevel4_2TransferSyntax);
-//    ts.push_back(UID_HEVCMainProfileLevel5_1TransferSyntax);
-//    ts.push_back(UID_HEVCMain10ProfileLevel5_1TransferSyntax);
-//    ts.push_back(UID_RLELosslessTransferSyntax );
-//    ts.push_back(UID_RFC2557MIMEEncapsulationTransferSyntax);
-//    ts.push_back(UID_XMLEncodingTransferSyntax );
-//    ts.push_back(UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax);
-    //scu.addPresentationContext(UID_MRImageStorage, ts);
-    
-    //add the presentation context per the dicom header
-    //should update to better names
-    OFString seed;
-    OFString seed2;
-    mi.findAndGetOFString(DCM_TransferSyntaxUID, seed);
-    mi.findAndGetOFString(DCM_MediaStorageSOPClassUID, seed2);
-    ts2.push_back(seed);
-    scu.addPresentationContext(seed2, ts2);
-    //scu.addPresentationContext(UID_MRImageStorage, ts2);
-    
-    scu.addPresentationContext(UID_FINDStudyRootQueryRetrieveInformationModel, ts);
-    scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
-    scu.addPresentationContext(UID_VerificationSOPClass, ts);
-    scu.setDatasetConversionMode(OFTrue);
-    /* Negotiate Association */
-    
-    /* Initialize network */
-    time_t now = time(0);
-    printf("Sending: %s\n", ctime(&now) );
-    OFCondition result = scu.initNetwork();
-    if (result.bad())
-    {
-        printf("init: %s\n",result.text());
-        return 1;
-    }
-    
-    result = scu.negotiateAssociation();
-    if (result.bad())
-    {
-        printf("neg: %s\n", result.text());
-        return 1;
-    }
-    
-    /* Let's look whether the server is listening:
-     Assemble and send C-ECHO request
-     */
-    result = scu.sendECHORequest(0);
-    if (result.bad())
-    {
-        printf("echo: %s\n", result.text());
-        return 1;
-    }
-    
-    //verify presentation context, mostly trivial at this point
-    //T_ASC_PresentationContextID presID = findUncompressedPC(UID_MRImageStorage, scu);
-    T_ASC_PresentationContextID presID = findAnyPc(seed2, scu, seed);
-
-    if(presID == 0)
-    {
-        printf("Unknown presentation context. %s : %s\n",seed.c_str(),seed2.c_str());
-        return 1;
-    }
-    
-    scu.sendSTORERequest(presID, fn, 0, response);
-    //scu.closeAssociation(DCMSCU_RELEASE_ASSOCIATION);
-    scu.releaseAssociation();
-    return false;
-}
-std::string Forward::toString(){return ("IP: "+Dest+"   Port: "+std::to_string(DestPort)+"   Value: "+AETitle);}
-
-
+//forward moved to mapFwd.cpp
 
 
 
@@ -939,7 +819,8 @@ bool AddtlProject::Send(std::string fPath, DcmMetaInfo &mi, DcmDataset &ds )
     //build our new path
     boost::filesystem::path source(fPath);
     std::string destFile = source.filename().string();
-    std::string destPath = source.parent_path().parent_path().string();
+    //path_to_output/project/uid/file - so, we want the great-grandparent
+    std::string destPath = source.parent_path().parent_path().parent_path().string();
     destPath = destPath + "/" + AETitle;
     if(!boost::filesystem::exists(destPath))
     {
@@ -956,248 +837,50 @@ std::string AddtlProject::toString(){return ("Group: "+std::to_string(group)+"  
 
 
 
-
-
-mapping::mapping(myMaps m)
+ReplaceChars::ReplaceChars(long p_group, long p_element, std::string p_oldSymbol, std::string p_newSymbol)
+:group(p_group),element(p_element),oldSymbol(p_oldSymbol),newSymbol(p_newSymbol){}
+ReplaceChars::ReplaceChars(std::string csvList)
 {
-    //create my vectors
-    updateVec("qualifiers", qset, m);
-    updateVec("modify", mset, m);
-    updateVec("anon", aset, m);
-    updateVec("key", kset, m);
-    updateVec("forward", fset, m);
-    updateVec("projects", pset, m);
-    updateVec("hash", hset, m);
-    updateVec("delete", dset, m);
-    updateVec("sequence", sset, m);
-    updateVec("seqhash",shset, m);
-    std::string k = "removePrivateTags";
-    if ((m.find(k) != m.end()) && ((m.find(k)->second).begin()->compare("true") == 0))
-    {
-        rmvPrivateData=true;
-    }
-    k = "removeCurveData";
-    if ((m.find(k) != m.end()) && ((m.find(k)->second).begin()->compare("true") == 0))
-    {
-        rmvCurveData=true;
-    }
-    k = "cleanOverlays";
-    if ((m.find(k) != m.end()) && ((m.find(k)->second).begin()->compare("true") == 0))
-    {
-        cleanOverlays=true;
-    }
+    long group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+    long element = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+    //for general case where token isn't provided, this will consume the rest of the string and token will be ''
+    std::string oldsymbol = splitOnChar(csvList, ',');
+    //std::string value = csvList;
+    std::string newsymbol = csvList;
+    *this=ReplaceChars(group, element, oldsymbol, newsymbol);
 }
-void mapping::removeAllPrivateTags(DcmDataset &ds)
+bool ReplaceChars::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
 {
-    //these 3 special functions are basically the same (just a different condition).
-    //I should abstract them at some point
-    DcmStack stack;
-    DcmObject *dobj = NULL;
-    DcmTagKey tag;
-    OFCondition status = ds.nextObject(stack, OFTrue);
-    while(status.good())
+    //load the keymapping
+    OFCondition status;
+    OFString key;
+    DcmItem *di = findItem(group, mi, ds);
+    if(di->findAndGetOFString(DcmTagKey(group, element), key).good())
     {
-        dobj = stack.top();
-        tag = dobj->getTag();
-        if(tag.getGroup() & 1) //private tag
-        {
-            stack.pop();
-            delete ((DcmItem *)(stack.top()))->remove(dobj);
-        }
-        status = ds.nextObject(stack, OFTrue);
-    }
-}
-void mapping::removeCurveData(DcmDataset &ds)
-{
-    DcmStack stack;
-    DcmObject *dobj = NULL;
-    DcmTagKey tag;
-    OFCondition status = ds.nextObject(stack, OFTrue);
-    while(status.good())
-    {
-        dobj = stack.top();
-        tag = dobj->getTag();
+        std::string temp = key.c_str();
+        boost::trim(temp);
         
-        //if group is 0x50xx
-        if( (tag.getGroup() & 0xFF00) == 0x5000)
-        {
-            stack.pop();
-            delete ((DcmItem *)(stack.top()))->remove(dobj);
-        }
-        status = ds.nextObject(stack, OFTrue);
-    }
-}
-void mapping::cleanAllOverlays(DcmDataset &ds)
-{
-    DcmStack stack;
-    DcmObject *dobj = NULL;
-    DcmTagKey tag;
-    OFCondition status = ds.nextObject(stack, OFTrue);
-    while(status.good())
-    {
-        dobj = stack.top();
-        tag = dobj->getTag();
-        
-        //remove overlay comments (0x60xx,0x4000)
-        if( ((tag.getGroup()&0xFF00)==0x6000) && (tag.getElement()==0x4000) )
-        {
-            stack.pop();
-            delete ((DcmItem *)(stack.top()))->remove(dobj);
-        }
-        //remove overlay data(0x60xx,0x3000)
-        else if( ((tag.getGroup()&0xFF00)==0x6000) && (tag.getElement()==0x3000) )
-        {
-            stack.pop();
-            delete ((DcmItem *)(stack.top()))->remove(dobj);
-        }
-        else {/*do nothing*/}
-        status = ds.nextObject(stack, OFTrue);
-    }
-}
-bool mapping::apply(std::string targetFile)
-{
-    
-    
-    DcmFileFormat fileformat;
-    OFCondition status = fileformat.loadFile(targetFile.c_str());
-    if (!status.good())
-    {
-        return false;
-    }
-    DcmDataset *dataset = fileformat.getDataset();
-    DcmMetaInfo *metainfo = fileformat.getMetaInfo();
-    //if there are no qualifiers, it should pass this step
-    //TODO - I may need a way to specify no qualifier on the initial setup!
-    //it looks like, if it isn't there, it'll just not make and then therefore skip this for loop
-    for(Qualifier q:qset)
-    {
-        if(!q.passesTest(*metainfo, *dataset))
-            return false;
-    }
-    //copy into any other projects it should be included in
-    for(auto p = pset.begin(); p != pset.end(); ++p)
-    {
-        p->Send(targetFile.c_str(), *metainfo, *dataset);
-    }
-    //passed all the qualifiers, apply all mappings
-    if(rmvPrivateData)
-    {
-        //printf("trying to remove private tags\n");
-        removeAllPrivateTags(*dataset);
-    }
-    if(rmvCurveData)
-    {
-        removeCurveData(*dataset);
-    }
-    if(cleanOverlays)
-    {
-        cleanAllOverlays(*dataset);
-    }
-    
-    // ?? for(auto m:mset) m.updateDCM(targetFile);
-    for(auto d = dset.begin(); d != dset.end(); ++d)
-    {
-        d->updateDCM(*metainfo, *dataset);
-    }
-    for(auto m = mset.begin(); m != mset.end(); ++m)
-    {
-        m->updateDCM(*metainfo, *dataset);
-    }
-    for(auto k = kset.begin(); k != kset.end(); ++k)
-    {
-        k->updateDCM(*metainfo, *dataset, k->getMapPath(targetFile));
-    }
-    for(auto a = aset.begin(); a != aset.end(); ++a)
-    {
-        a->updateDCM(*metainfo, *dataset);
-    }
-    for(auto s:sset)
-    {
-        s.updateDCM(*metainfo, *dataset);
-    }
-    for(auto h:hset)
-    {
-        h.updateDCM(*metainfo, *dataset);
-    }
-    for(auto h:shset)
-    {
-        h.updateDCM(*metainfo, *dataset);
-    }
-    //TODO - test just sending the dataset directly
-    fileformat.saveFile("test.dcm");
-    for(auto f = fset.begin(); f != fset.end(); ++f)
-    {
-        f->Send("test.dcm", *metainfo);
-        //give a small delay, we can overwhelm XNAT if we send to quickly
-        //a small delay will have neglible impact on one session, maybe add a few seconds
-        //but, will give significant time for XNAT to sort through things when sending
-        //1000s of files.
-        std::this_thread::sleep_for(std::chrono::milliseconds(200));
-    }
-    return true;
-}
-
-mappings::mappings(){filepath = "";}
-mappings::mappings(std::string p_filepath):filepath(std::move(p_filepath)){}
-bool mappings::setPath(std::string filepath)
-{
-    this->filepath=filepath;
-    return true;
-}
-std::string mappings::getPath(){return this->filepath;}
-std::string mappings::getProjEmail(){return this->projEmail;}
-mappings::myMappings mappings::getMaps(){return mapSet;}
-bool mappings::initialize()
-{
-    if(!boost::filesystem::is_regular_file(filepath))
-    {
-        return false;
-    }
-    //load config file
-    ProcConfigFile cf(filepath);
-    
-    //I need to return cs and iterate through that
-    contentsSets cs = cf.getConfigs();
-    for (std::vector<myMaps>::iterator i = cs.begin(); i != cs.end(); ++i)
-    {
-        std::string key = "email";
-        if (i->find(key) != i->end())
-        {
-            //should be only 1 per file
-            for(std::string j:i->find(key)->second){projEmail = j;}
-        }
-        mapSet.emplace_back(*i);
-    }
-    return true;
-}
-bool mappings::initialize(std::string filepath)
-{
-    this->filepath = filepath;
-    return initialize();
-}
-bool mappings::apply(std::string targetFile)
-{
-    if(!bInit)
-    {
-        if(initialize())
-        {
-            bInit = true;
-        }
-        else
+//        replace( temp.begin(), temp.end(), oldSymbol.c_str(), newSymbol.c_str() );
+        size_t safetyCheck = newSymbol.find_first_of(oldSymbol);
+        if(safetyCheck != std::string::npos)
         {
             return false;
         }
-    }
-    //will apply the first mapping that meets the appropriate criteria
-    //returns true is a mapping has been applied
-    for(auto m = mapSet.begin();m != mapSet.end(); ++m )
-    {
-        if(m->apply(targetFile))
-        {
-            //printf("mapping applied\n");
-            return true;
+        size_t found = temp.find_first_of(oldSymbol);
+
+        while (found != std::string::npos) { // If we found the old symbol.
+            temp.replace(found, oldSymbol.length(), newSymbol);
+            found = temp.find_first_of(oldSymbol, found+1); // Find again.
         }
+        
+        
+        //update target in the dicom and save
+        status = di->putAndInsertString(DcmTagKey(group,element), temp.c_str());
+        return status.good();
     }
     return false;
 }
+std::string ReplaceChars::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element)+"   old chars: "+oldSymbol+"    new chars: "+newSymbol);}
+
+//mapping and mappings moved to mappingStructures.cpp
 

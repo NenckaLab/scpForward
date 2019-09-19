@@ -6,11 +6,16 @@
 #include "loadConfig.h"
 #include "watchDirs.hpp"
 
+#define VERSION_MAJOR 1
+#define VERSION_MINOR 3
+#define VERSION_REVISION 3
+
 //function to launch the SCP listener on a separate thread.
 void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
 {
     int x = 0;
     time_t start = time(0);
+    
     
     //while( (!b->getStopRunning()) && (x < 5))
     while( ((cfg->getValueOfKey<std::string>("keep_running")) == "True") && (x<5) )
@@ -90,8 +95,22 @@ void startDirectoryWatch(ConfigFile *cfg)
     }
 }
 
+void startDirectorySort(ConfigFile *cfg)
+{
+    //TODO - need a way to capture and restart a fail.
+    WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
+    while(cfg->getValueOfKey<std::string>("keep_running") == "True")
+    {
+        w.sortChecks();
+        sleep(2);
+    }
+}
+
 int main(int /*argc*/, char * /*argv*/ [])
 {
+    
+    printf("Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
+    
     ConfigFile cfg = getConfig();
     
     //Thread 1
@@ -102,7 +121,11 @@ int main(int /*argc*/, char * /*argv*/ [])
     
     //Thread 2
     std::thread dwatch(startDirectoryWatch, &cfg);
-    printf("directory watch has launched.\n");
+    printf("directory processor has launched.\n");
+    
+    //Thread 3
+    std::thread dsort(startDirectorySort, &cfg);
+    printf("directory sorter has launched.\n");
     
     
     //TODO - The future logic that watches cfg for updates will need to map back to this location in myListener.
@@ -115,6 +138,7 @@ int main(int /*argc*/, char * /*argv*/ [])
 //    cfgThread.join();
     scp.join();
     dwatch.join();
+    dsort.join();
     printf("stopped\n");
 }
 

@@ -13,6 +13,7 @@
 #include <boost/filesystem.hpp>
 #include <ctime>
 #include <map>
+#include "mapping.hpp"
 
 class WatchDirs
 {
@@ -29,12 +30,14 @@ private:
     void read_directory(const std::string& name, dirvec& v);
     void process_aetitle_dir(boost::filesystem::directory_entry d);
     bool process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly);
+    bool process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly, bool sort);
+    bool processSessionDir(mappings myMappings, boost::filesystem::directory_entry sd, bool cfgPresent);
     int sendmail(const char *to, const char *from, const char *subject, const char *message);
     void fireEmails(const std::string &to, const std::string &cc, int hours, boost::filesystem::directory_entry d, const std::string &message);
     
 public:
     WatchDirs(const std::string &workingDir, const std::string &finalDir, const std::string &adminEmail);
-    
+    bool sortChecks();
     bool runChecks();
 };
 

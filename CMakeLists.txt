@@ -6,7 +6,7 @@ SET(CMAKE_CXX_FLAGS "-std=c++11")
 add_definitions(-DHAVE_CONFIG_H)
 add_definitions(-DSOURCE_CODE_LOCATION="${CMAKE_SOURCE_DIR}")
 
-set(SOURCE_FILES scpForward.cpp dstorscp2.h dstorscp2.cpp loadConfig.h loadConfig.cpp watchDirs.hpp watchDirs.cpp mapping.hpp mapping.cpp loadProcessingConfig.h loadProcessingConfig.cpp md5.h)
+set(SOURCE_FILES scpForward.cpp dstorscp2.h dstorscp2.cpp loadConfig.h loadConfig.cpp watchDirs.hpp watchDirs.cpp mapping.hpp mapping.cpp loadProcessingConfig.h loadProcessingConfig.cpp md5.h mapFwd.cpp mappingCustom.cpp mappingStructures.cpp)
 find_package(DCMTK REQUIRED)
 
 include_directories(${DCMTK_INCLUDE_DIRS})

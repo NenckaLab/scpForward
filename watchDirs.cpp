@@ -6,7 +6,6 @@
 //
 
 #include "watchDirs.hpp"
-#include "mapping.hpp"
 #include <boost/algorithm/string.hpp>
 
 struct path_leaf_string
@@ -102,7 +101,12 @@ void WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d)
     WatchDirs::process_aetitle_dir(d, false);
 }
 
-bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly)
+
+bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly){
+    return WatchDirs::process_aetitle_dir(d, false, false);
+}
+
+bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly, bool sort)
 {
     dirvec v;
     bool cfgPresent, dcmPresent30sec, dcmPresent1hour = false;
@@ -121,71 +125,231 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
         }
     }
     
+    
+//    //TODO - move this to a subprocess on subdirectories
+//    //pass path and myMappings
+//    //process dicoms
+//    for (auto i = v.begin(); i != v.end(); ++i)
+//    {
+//        //apply the rules found in the config file
+//        if(i->path().extension().string() == ".dcm")
+//        {
+//            //std::time_t t = boost::filesystem::last_write_time(i);
+//            std::time_t s = boost::filesystem::last_write_time(*i);
+//            std::time_t n = std::time(0);
+//            double d = difftime(n,s);
+//            //if i has been here for more than 30 seconds
+//            dcmPresent30sec = (d > 30);
+//            //if i has been here for more than 1 hour
+//            dcmPresent1hour = (d > 3600);
+//            if(!checkOnly && dcmPresent30sec && cfgPresent)
+//            {
+//                //apply the config file
+//                if(myMappings.apply(i->path().c_str()))
+//                {
+//                    //printf("Mappings applied\n");
+//                    //move the original file to the completed directory
+//                    boost::filesystem::path p(*i);
+//                    std::string test = p.c_str();
+//                    //boost::replace_all(test, "Output", "Finished");
+//                    boost::replace_all(test, path, finishedPath);
+//                    boost::filesystem::path dest(test);
+//                    std::string destPath = dest.parent_path().string();
+//                    if(!boost::filesystem::exists(destPath))
+//                    {
+//                        boost::filesystem::create_directories(destPath);
+//                    }
+////                        printf("   %s\n", p.c_str());
+////                        printf("   %s\n", test.c_str());
+//                    std::rename(p.c_str(),  test.c_str());
+//                    dcmPresent30sec = false;
+//                    dcmPresent1hour = false;
+//                }
+//            }
+//        }
+//    }
+    
+    //TODO - separate this better later
+    if(sort){
+        for (auto i = v.begin(); i != v.end(); ++i)
+        {
+            //if this is a dcm, move it.
+            if(exists(*i) && is_regular_file(*i) && (i->path().extension().string() == ".dcm"))
+            {
+    //            std::cout<<"found a file: "<<i->path().filename().string()<<std::endl;
+    //            std::cout<<"   "<<i->path().string()<<std::endl;
+                //get the correct UID for the session
+                long group = std::strtol("0x0020", NULL, 16);
+                long element = std::strtol("0x000D", NULL, 16);
+                DcmFileFormat fileformat;
+                OFCondition status = fileformat.loadFile(i->path().string().c_str());
+                if (!status.good())
+                {
+                    return false;
+                }
+                DcmDataset *dataset = fileformat.getDataset();
+                OFString value = "Default String";
+                dataset->findAndGetOFString(DcmTagKey(group, element), value);
+    //            std::cout<<"    "<<value.c_str()<<std::endl;
+                
+                //create the folder if it doesn't exist
+                std::string destPath(i->path().parent_path().string() + "/" + value.c_str() ); // + i->path().filename().c_str())
+                if(!boost::filesystem::exists(destPath))
+                {
+                    boost::filesystem::create_directories(destPath);
+                }
+                //move the file
+                std::rename(i->path().string().c_str(), (destPath + "/" + i->path().filename().string()).c_str() );
+            }
+        }
+    }else{
+    
+        for (auto i = v.begin(); i != v.end(); ++i)
+        {
+            dcmPresent30sec = true;
+            //only process directories
+            if(is_directory(*i)){
+                //process the session directory, returns true if it has dicoms and all are over 1 hour old.
+                if(WatchDirs::processSessionDir(myMappings, *i, cfgPresent)){
+                    dcmPresent1hour = true;
+                }
+            }
+        }
+        
+        if(!cfgPresent && dcmPresent30sec)
+        {
+           //send email to admin that this AETitle is receiving files
+            //but has no config
+            //something like:
+            //fireEmail(toAddress,ccAddress,timeframe,directory,reason);
+            fireEmails(adminEmail,"",24,d,"AETitle folder exists with dicoms, but has no config file.\nPath is: " + d.path().string() + "\n");
+            return false;
+        }
+       else if(cfgPresent && dcmPresent1hour)
+        {
+            //get local email
+            std::string projEmail = myMappings.getProjEmail();
+            if(projEmail == "")
+            {
+                projEmail = adminEmail;
+            }
+            //get when email last sent - configs gets reloaded, so we'll need to store in this object
+            //      some sort of mapping...
+            //send email status to admin and user email - ~ daily?
+            fireEmails(projEmail,adminEmail,24,d,"AETitle folder exists with dicoms. Config file exists, but was not applied.\nPath is: " + d.path().string() + "\n");
+            return false;
+        }
+        else{}
+    }
+    return true;
+}
+
+bool WatchDirs::processSessionDir(mappings myMappings, boost::filesystem::directory_entry sd, bool cfgPresent){
+    dirvec v;
+    //std::vector<boost::filesystem::path> toProcess;
+    std::vector<std::string> toProcess;
+    read_directory(sd.path().c_str(), v);
+    bool allDcmPresent90sec = true;
+    bool allDcmPresent1hour = true;
+    
+    //TODO - move this to a subprocess on subdirectories
+    //pass path and myMappings
     //process dicoms
+    int count = 0;
     for (auto i = v.begin(); i != v.end(); ++i)
     {
         //apply the rules found in the config file
         if(i->path().extension().string() == ".dcm")
         {
+            count++;
             //std::time_t t = boost::filesystem::last_write_time(i);
             std::time_t s = boost::filesystem::last_write_time(*i);
             std::time_t n = std::time(0);
             double d = difftime(n,s);
-            //if i has been here for more than 30 seconds
-            dcmPresent30sec = (d > 30);
-            //if i has been here for more than 1 hour
-            dcmPresent1hour = (d > 3600);
-            if(!checkOnly && dcmPresent30sec && cfgPresent)
+            //TODO - magic numbers, maybe move to the config file?
+            //also, could just return false if it fails the 90 sec check
+            if(d < 90){
+                allDcmPresent1hour=false;
+                allDcmPresent90sec=false;
+                break;
+            }
+            if(d < 3600){
+                allDcmPresent1hour=false;
+            }
+            toProcess.push_back(i->path().string());
+        }
+    }
+    if(count == 0){
+        return false;
+    }
+    
+    if(allDcmPresent90sec && cfgPresent){
+        //apply the config file
+        if(myMappings.applySession(toProcess))
+        {
+            //TODO - this is where we aren't moving the directory for some reason
+            //was working before
+            //is failing now, but only if the destParent doesn't exist to beging with.
+            //probably want to do some printouts when testing this portion
+            
+            
+            //sd is the directory we're processing
+            std::string test = sd.path().c_str();
+            //change the name to the finished directory
+            boost::replace_all(test, path, finishedPath);
+            boost::filesystem::path dest(test);
+            //make sure the parent destination exist
+            std::string destParent = dest.parent_path().string();
+            if(!boost::filesystem::exists(destParent))
             {
-                //apply the config file
-                if(myMappings.apply(i->path().c_str()))
+                //TODO - figure out why this isn't working
+                boost::filesystem::create_directories(destParent);
+            }
+            //if the destination already exists
+            if(boost::filesystem::exists(dest.string()))
+            {
+                //destination exists, copy each file
+                for (auto i = v.begin(); i != v.end(); ++i)
                 {
-                    //printf("Mappings applied\n");
-                    //move the original file to the completed directory
-                    boost::filesystem::path p(*i);
-                    std::string test = p.c_str();
-                    //boost::replace_all(test, "Output", "Finished");
-                    boost::replace_all(test, path, finishedPath);
-                    boost::filesystem::path dest(test);
-                    std::string destPath = dest.parent_path().string();
-                    if(!boost::filesystem::exists(destPath))
-                    {
-                        boost::filesystem::create_directories(destPath);
-                    }
-//                        printf("   %s\n", p.c_str());
-//                        printf("   %s\n", test.c_str());
-                    std::rename(p.c_str(),  test.c_str());
-                    dcmPresent30sec = false;
-                    dcmPresent1hour = false;
+                    boost::filesystem::path p(dest);
+                    p /= i->path().filename();
+                    std::rename(i->path().string().c_str(), p.string().c_str() );
                 }
+                //then remove the directory
+                boost::filesystem::remove_all(sd.path());
+            }else{
+                //destination doesn't exist. Simple move
+                std::rename(sd.path().string().c_str(), dest.string().c_str());
+            }
+            //if it was successful, switch message back to false.
+            allDcmPresent1hour=false;
+        }
+    }
+    return allDcmPresent1hour;
+}
+
+bool WatchDirs::sortChecks()
+{
+    dirvec v;
+    //watch all subfolders
+    read_directory(path , v);
+    for (auto i = v.begin(); i != v.end(); ++i)
+    {
+        
+        if(exists(*i) && is_directory(*i)){
+            //try so the entire thread doesn't collapse from a bad config file.
+            //extra delay on a fail, just so the system doesn't hammer a bad config quite as fast.
+            try {
+                process_aetitle_dir(*i, false, true);
+            } catch (const std::exception& e) {
+                printf("Error in directory: %s\n    %s\n", i->path().c_str(), e.what());
+                sleep(10);
+            } catch (...) {
+                printf("Undefined exception caught in directory watch.\n");
+                sleep(10);
             }
         }
     }
-    
-    if(!cfgPresent && dcmPresent30sec)
-    {
-       //send email to admin that this AETitle is receiving files
-        //but has no config
-        //something like:
-        //fireEmail(toAddress,ccAddress,timeframe,directory,reason);
-        fireEmails(adminEmail,"",24,d,"AETitle folder exists with dicoms, but has no config file.\nPath is: " + d.path().string() + "\n");
-        return false;
-    }
-   else if(cfgPresent && dcmPresent1hour)
-    {
-        //get local email
-        std::string projEmail = myMappings.getProjEmail();
-        if(projEmail == "")
-        {
-            projEmail = adminEmail;
-        }
-        //get when email last sent - configs gets reloaded, so we'll need to store in this object
-        //      some sort of mapping...
-        //send email status to admin and user email - ~ daily?
-        fireEmails(projEmail,adminEmail,24,d,"AETitle folder exists with dicoms. Config file exists, but was not applied.\nPath is: " + d.path().string() + "\n");
-        return false;
-    }
-    else{}
     return true;
 }
 
@@ -196,6 +360,7 @@ bool WatchDirs::runChecks()
     read_directory(path , v);
     for (auto i = v.begin(); i != v.end(); ++i)
     {
+        
         if(exists(*i) && is_directory(*i)){
             //try so the entire thread doesn't collapse from a bad config file.
             //extra delay on a fail, just so the system doesn't hammer a bad config quite as fast.

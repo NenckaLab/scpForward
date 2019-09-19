@@ -24,6 +24,7 @@
 //private:
 void ProcConfigFile::removeComment(std::string &line) const
 {
+    //TODO - maybe. This should be specific enough that we don't need loadConfig.cpp updates for this function.
     if (line.find(';') != line.npos)
         line.erase(line.find(';'));
     if (line.find('#') != line.npos)

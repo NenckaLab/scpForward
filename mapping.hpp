@@ -11,6 +11,11 @@
 #include <string>
 #include "loadProcessingConfig.h"
 #include "dcmtk/dcmdata/dctk.h"
+#include "dcmtk/dcmnet/scu.h"
+
+//some helper functions
+std::string splitOnChar(std::string &stToParse, char splitter);
+DcmItem* findItem(long group, DcmMetaInfo &mi, DcmDataset &ds);
 
 //TODO - base class for the alterations
 //class Alteration
@@ -40,6 +45,41 @@ public:
     bool passesTest(std::string fpath);
     std::string toString();
 };
+
+class ReplaceChars
+{
+private:
+    long group;
+    long element;
+    std::string oldSymbol;
+    std::string newSymbol;
+public:
+    ReplaceChars(long group, long element, std::string oldSymbol, std::string newSymbol);
+    ReplaceChars(std::string csvList);
+    long getGroup();
+    long getElement();
+    bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds);
+    std::string toString();
+};
+
+class ReferenceTime
+{
+private:
+    long group;
+    long element;
+    long refGroup;
+    long refElement;
+public:
+    ReferenceTime(long group, long element, long refGroup, long refElement);
+    ReferenceTime(std::string csvList);
+    long getGroup();
+    long getElement();
+    long getRefGroup();
+    long getRefElement();
+    bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds);
+    std::string toString();
+};
+
 
 class Modify
 {
@@ -122,7 +162,11 @@ private:
     long element;
     std::string fMapName;
     std::string token;
+    long groupSource;
+    long elementSource;
+    std::string keymapPath;
 public:
+    KeyMap(long group, long element, std::string fMapName, std::string token, long groupSource, long elementSource);
     KeyMap(long group, long element, std::string fMapName, std::string token);
     KeyMap(std::string csvList);
     bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath);
@@ -150,10 +194,17 @@ private:
     std::string AETitle;
     std::string Dest;
     unsigned short DestPort;
+    DcmSCU scu;
+    T_ASC_PresentationContextID presID;
 public:
+    Forward(const Forward &other);
     Forward(std::string AETitle, std::string Dest, unsigned short DestPort);
     Forward(std::string csvList);
     bool Send(std::string fPath, DcmMetaInfo &mi);
+    T_ASC_PresentationContextID getPresentationID();
+    T_ASC_PresentationContextID CreateConnection(DcmMetaInfo &mi);
+    bool Send(DcmDataset *dataset, T_ASC_PresentationContextID presID);
+    bool Release();
     std::string toString();
 };
 
@@ -174,6 +225,7 @@ class mapping
 {
 private:
     //TODO - if I add Alterations, we only need one vector with several instantiations
+    typedef std::vector<ReferenceTime> referenceTimes;
     typedef std::vector<Qualifier> qualifiers;
     typedef std::vector<Modify> modifiers;
     typedef std::vector<KeyMap> keymaps;
@@ -184,8 +236,10 @@ private:
     typedef std::vector<Delete> deletes;
     typedef std::vector<Sequence> sequences;
     typedef std::vector<SeqHash> sequencehash;
+    typedef std::vector<ReplaceChars> replaceCharacters;
     
     //Or, we could reduce, but, that would significantly alter my order of operations
+    referenceTimes rTimeset;
     qualifiers qset;
     modifiers mset;
     keymaps kset;
@@ -196,6 +250,7 @@ private:
     sequences sset;
     sequencehash shset;
     projects pset;
+    replaceCharacters rCharset;
     
     bool rmvPrivateData = false;
     bool rmvCurveData = false;
@@ -207,6 +262,7 @@ private:
 public:
     mapping(myMaps m);
     bool apply(std::string targetFile);
+    bool apply(std::vector<std::string> targetFiles);
     
     template <typename T>
     void updateVec(std::string key, T &vec, myMaps m)
@@ -241,6 +297,7 @@ public:
     bool initialize();
     bool initialize(std::string filepath);
     bool apply(std::string targetFile);
+    bool applySession(std::vector<std::string> targetFiles);
     myMappings getMaps();
 };
 
