@@ -65,7 +65,6 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
     myListener->setFilenameGenerationMode(DcmStorageSCP::FGM_SOPInstanceUID);
     myListener->setFilenameExtension(".dcm");
     myListener->setDatasetStorageMode(DcmStorageSCP::DGM_StoreToFile);
-    //myListener->setOutputDirectory("/Users/bswearingen/scpLT/Output/");
     myListener->setOutputDirectory(OFString((cfg->getValueOfKey<std::string>("output_dir")).c_str()));
     myListener->setDirectoryGenerationMode(DcmStorageSCP::DGM_AEName);
     myListener->setConnectionBlockingMode(DUL_NOBLOCK);
@@ -79,7 +78,6 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
 
 ConfigFile getConfig()
 {
-    //ConfigFile temp("/Users/bswearingen/scpForward/config.cfg");
     ConfigFile temp("config.cfg");
     return temp;
 }
