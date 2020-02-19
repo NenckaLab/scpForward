@@ -10,3 +10,5 @@ Keyed data will be stored in "Output/[called aetitle]/test.map"
 test.map can be prepopulated with known/desired keys
 
 A cron job must be created to flush the Finished folder or it will retain files indefinitely.
+
+Requires the DCMTK libraries be built/provided.
