@@ -2,6 +2,7 @@
 test/
 Output/
 dcmtk/
+build*
 
 .DS_Store
 .DS_Store
