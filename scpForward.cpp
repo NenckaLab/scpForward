@@ -8,7 +8,7 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 3
-#define VERSION_REVISION 3
+#define VERSION_REVISION 4
 
 //function to launch the SCP listener on a separate thread.
 void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)

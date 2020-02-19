@@ -1,0 +1,3 @@
+1.3.4 - Added trim functionality for '^', especially for dicom tag 0010,0010
+    BS 1/29/20
+

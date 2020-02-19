@@ -664,6 +664,10 @@ bool KeyMap::updateDCM(DcmMetaInfo &mi, DcmDataset &ds, std::string mapPath)
     {
         std::string temp = keySource.c_str();
         boost::trim(temp);
+        //potential solution to stupid problem of someone putting extra spaces in 0010,0010, which come through as ^
+        //boost::trim_if(temp, =="^")
+        boost::trim_if(temp, boost::is_any_of("^"));  //-- Probably this one...
+        //boost::trim_all_if(temp, boost::is_any_of("^"));
         keySource = temp.c_str();
         char uid[UID_SIZE + 1];
         uid[UID_SIZE] = '\0';
@@ -779,6 +783,56 @@ bool Anon::updateDCM(std::string fPath)
     return false;
 }
 std::string Anon::toString(){return ("Group: "+std::to_string(group)+"   Element: "+std::to_string(element));
+}
+
+
+RemovePrivateTagsWithExceptions::RemovePrivateTagsWithExceptions(std::string csvList)
+{
+    //std::vector<std::pair<long,long>> exceptions;
+    long group = 0;
+    long element = 0;
+    while(csvList.length() > 0)
+    {
+        group = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+        element = std::strtol(splitOnChar(csvList, ',').c_str(), NULL, 16);
+        exceptions.push_back(std::make_pair(group,element));
+    }
+}
+bool RemovePrivateTagsWithExceptions::updateDCM(DcmMetaInfo &mi, DcmDataset &ds)
+{
+    DcmStack stack;
+    DcmObject *dobj = NULL;
+    DcmTagKey tag;
+    OFCondition status = ds.nextObject(stack, OFTrue);
+    while(status.good())
+    {
+        dobj = stack.top();
+        tag = dobj->getTag();
+        if(tag.getGroup() & 1) //private tag
+        {
+            std::pair<long,long> test = std::make_pair(tag.getGroup(), tag.getElement());
+            if(std::find(exceptions.begin(), exceptions.end(), test) != exceptions.end()) {
+                /* v contains x */
+            } else {
+                /* v does not contain x */
+                stack.pop();
+                delete ((DcmItem *)(stack.top()))->remove(dobj);
+            }
+        }
+        status = ds.nextObject(stack, OFTrue);
+    }
+    return true;
+}
+std::string RemovePrivateTagsWithExceptions::toString()
+{
+    std::string test = "Remove all private tags except:\n";
+    for (std::vector<std::pair<long,long>>::const_iterator iter = exceptions.begin();
+         iter != exceptions.end();
+         ++iter)
+    {
+        test = test + "  Group:" + std::to_string(iter->first) + " Element:" + std::to_string(iter->second) + "\n";
+    }
+    return test;
 }
 
 

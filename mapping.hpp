@@ -188,6 +188,20 @@ public:
     std::string toString();
 };
 
+class RemovePrivateTagsWithExceptions
+{
+private:
+    std::vector<std::pair<long,long>> exceptions;
+    //long group;
+    //long element;
+public:
+    //Anon(long group, long element);
+    RemovePrivateTagsWithExceptions(std::string csvList);
+    bool updateDCM(DcmMetaInfo &mi, DcmDataset &ds);
+    //bool updateDCM(std::string fPath);
+    std::string toString();
+};
+
 class Forward
 {
 private:
@@ -237,6 +251,7 @@ private:
     typedef std::vector<Sequence> sequences;
     typedef std::vector<SeqHash> sequencehash;
     typedef std::vector<ReplaceChars> replaceCharacters;
+    typedef std::vector<RemovePrivateTagsWithExceptions> rmvPrivWExc;
     
     //Or, we could reduce, but, that would significantly alter my order of operations
     referenceTimes rTimeset;
@@ -251,12 +266,15 @@ private:
     sequencehash shset;
     projects pset;
     replaceCharacters rCharset;
+    rmvPrivWExc rPriv;
     
     bool rmvPrivateData = false;
     bool rmvCurveData = false;
     bool cleanOverlays = false;
     
     void removeAllPrivateTags(DcmDataset &ds);
+    // not sure what the best way to handle this is...
+    //void removeAllPrivateTagsGE(DcmDataset &ds);
     void removeCurveData(DcmDataset &ds);
     void cleanAllOverlays(DcmDataset &ds);
 public:
