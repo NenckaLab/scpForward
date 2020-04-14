@@ -92,52 +92,7 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
     scu.setPeerHostName(Dest.c_str());
     scu.setPeerPort(DestPort);
     /* Presentation context */
-    
-    
-    //    ts.push_back(UID_JPEGLSLosslessTransferSyntax);
-    //    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax);
-    ts.push_back(UID_LittleEndianExplicitTransferSyntax);
-    ts.push_back(UID_BigEndianExplicitTransferSyntax);
-    ts.push_back(UID_LittleEndianImplicitTransferSyntax);
-    //    ts.push_back(UID_DeflatedExplicitVRLittleEndianTransferSyntax );
-    //    ts.push_back(UID_JPEGProcess1TransferSyntax    );
-    //    ts.push_back(UID_JPEGProcess2_4TransferSyntax );
-    //    ts.push_back(UID_JPEGProcess3_5TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess6_8TransferSyntax       );
-    //    ts.push_back(UID_JPEGProcess7_9TransferSyntax );
-    //    ts.push_back(UID_JPEGProcess10_12TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess11_13TransferSyntax );
-    //    ts.push_back(UID_JPEGProcess14TransferSyntax    );
-    //    ts.push_back(UID_JPEGProcess15TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess16_18TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess17_19TransferSyntax   );
-    //    ts.push_back(UID_JPEGProcess20_22TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess21_23TransferSyntax   );
-    //    ts.push_back(UID_JPEGProcess24_26TransferSyntax  );
-    //    ts.push_back(UID_JPEGProcess25_27TransferSyntax   );
-    //    ts.push_back(UID_JPEGProcess28TransferSyntax        );
-    //    ts.push_back(UID_JPEGProcess29TransferSyntax         );
-    //    ts.push_back(UID_JPEGLSLossyTransferSyntax    );
-    //    ts.push_back(UID_JPEG2000LosslessOnlyTransferSyntax );
-    //    ts.push_back(UID_JPEG2000TransferSyntax        );
-    //    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionLosslessOnlyTransferSyntax);
-    //    ts.push_back(UID_JPEG2000Part2MulticomponentImageCompressionTransferSyntax);
-    //    ts.push_back(UID_JPIPReferencedTransferSyntax  );
-    //    ts.push_back(UID_JPIPReferencedDeflateTransferSyntax);
-    //    ts.push_back(UID_MPEG2MainProfileAtMainLevelTransferSyntax );
-    //    ts.push_back(UID_MPEG2MainProfileAtHighLevelTransferSyntax );
-    //    ts.push_back(UID_MPEG4HighProfileLevel4_1TransferSyntax);
-    //    ts.push_back(UID_MPEG4BDcompatibleHighProfileLevel4_1TransferSyntax);
-    //    ts.push_back(UID_MPEG4HighProfileLevel4_2_For2DVideoTransferSyntax);
-    //    ts.push_back(UID_MPEG4HighProfileLevel4_2_For3DVideoTransferSyntax);
-    //    ts.push_back(UID_MPEG4StereoHighProfileLevel4_2TransferSyntax);
-    //    ts.push_back(UID_HEVCMainProfileLevel5_1TransferSyntax);
-    //    ts.push_back(UID_HEVCMain10ProfileLevel5_1TransferSyntax);
-    //    ts.push_back(UID_RLELosslessTransferSyntax );
-    //    ts.push_back(UID_RFC2557MIMEEncapsulationTransferSyntax);
-    //    ts.push_back(UID_XMLEncodingTransferSyntax );
-    //    ts.push_back(UID_PrivateGE_LEI_WithBigEndianPixelDataTransferSyntax);
-    //scu.addPresentationContext(UID_MRImageStorage, ts);
+    scu.setVerbosePCMode(OFTrue);
     
     //add the presentation context per the dicom header
     //should update to better names
@@ -149,10 +104,30 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
     scu.addPresentationContext(seed2, ts2);
     //scu.addPresentationContext(UID_MRImageStorage, ts2);
     
+    //add some general case presentation contexts
+    ts.push_back(UID_LittleEndianExplicitTransferSyntax);
+    ts.push_back(UID_BigEndianExplicitTransferSyntax);
+    ts.push_back(UID_LittleEndianImplicitTransferSyntax);
+    scu.addPresentationContext(UID_MRImageStorage, ts);
+    scu.addPresentationContext(UID_CTImageStorage, ts);
     scu.addPresentationContext(UID_FINDStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_VerificationSOPClass, ts);
-    scu.setDatasetConversionMode(OFTrue);
+    
+    //add a special case pc we use often
+    OFList<OFString> ts_leiONLY;
+    ts_leiONLY.push_back(UID_LittleEndianImplicitTransferSyntax);
+    scu.addPresentationContext(UID_RTStructureSetStorage, ts_leiONLY);
+    
+    //no longer using
+    //scu.setDatasetConversionMode(OFTrue);
+    
+    
+    //printf("storage mode: %i\n", scu.getStorageMode());
+    scu.setStorageMode(DCMSCU_STORAGE_BIT_PRESERVING);
+    //printf("storage mode post: %i\n", scu.getStorageMode());
+    
+    
     /* Negotiate Association */
     
     /* Initialize network */
@@ -184,6 +159,10 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
         scu.releaseAssociation();
         return 0;
     }
+    Uint8 pc;
+    pc = scu.findPresentationContextID(UID_RTStructureSetStorage,UID_LittleEndianImplicitTransferSyntax );
+    result = scu.sendECHORequest(pc);
+    printf("echo test: %i %s\n", pc, result.text());
     
     presID = findAnyPc(seed2, scu, seed);
     
@@ -198,12 +177,14 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
 bool Forward::Send(DcmDataset *dataset, T_ASC_PresentationContextID presID)
 {
     Uint16 response;
+    OFCondition result;
     //OFFilename fn = OFFilename(fPath.c_str());
     if(presID != 0)
     {
-        //TODO - also make sure scu is initialized. Not really a huge deal as it fails if it isn't.
-        //scu.sendSTORERequest(presID, fn, 0, response);
-        scu.sendSTORERequest(presID, 0, dataset, response);
+        //if we've found any successful presID - redundant, we could streamline this.
+        //use the one set by the file
+        result = scu.sendSTORERequest(0, 0, dataset, response);
+        //printf("result: %s     response: %u\n",result.text(), response);
         //virtual OFCondition sendSTORERequest(const T_ASC_PresentationContextID presID,
 //                                             const OFFilename &dicomFile,
 //                                             DcmDataset *dataset,
@@ -239,6 +220,7 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
     scu.setPeerHostName(Dest.c_str());
     scu.setPeerPort(DestPort);
     /* Presentation context */
+    
     
     
     //    ts.push_back(UID_JPEGLSLosslessTransferSyntax);

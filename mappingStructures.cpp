@@ -250,7 +250,8 @@ bool mapping::apply(std::vector<std::string> targetFiles)
     
     for(auto targetFile = targetFiles.begin(); targetFile != targetFiles.end(); ++targetFile)
     {
-        OFCondition status = fileformat.loadFile(targetFile->c_str());
+        OFCondition status = fileformat.loadFile(targetFile->c_str(), EXS_Unknown, EGL_noChange, 16384, ERM_autoDetect);
+        
         if (!status.good())
         {
             return false;
@@ -259,6 +260,7 @@ bool mapping::apply(std::vector<std::string> targetFiles)
         metainfo = fileformat.getMetaInfo();
         
         
+        //fileformat.saveFile("/home/bswearingen/samples/before.dcm");
         //TODO: abstract actual apply - from here
         //update the dataset
         for(Qualifier q:qset)
@@ -266,68 +268,95 @@ bool mapping::apply(std::vector<std::string> targetFiles)
             if(!q.passesTest(*metainfo, *dataset))
                 return false;
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/qualifier.dcm");
         //copy into any other projects it should be included in
         for(auto p = pset.begin(); p != pset.end(); ++p)
         {
             p->Send(targetFile->c_str(), *metainfo, *dataset);
         }
+        //fileformat.saveFile("/home/bswearingen/samples/otherProjects.dcm");
         // reference times first, who knows what we'll remove where later
         for(auto r:rTimeset)
         {
             r.updateDCM(*metainfo, *dataset);
         }
+        //fileformat.saveFile("/home/bswearingen/samples/references.dcm");
         //passed all the qualifiers, apply all mappings
         if(rmvPrivateData)
         {
             //printf("trying to remove private tags\n");
             removeAllPrivateTags(*dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/private.dcm");
         if(rmvCurveData)
         {
             removeCurveData(*dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/curve.dcm");
         if(cleanOverlays)
         {
             cleanAllOverlays(*dataset);
         }
         
+        //fileformat.saveFile("/home/bswearingen/samples/overlays.dcm");
         // ?? for(auto m:mset) m.updateDCM(targetFile);
         for(auto d = dset.begin(); d != dset.end(); ++d)
         {
             d->updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/dset.dcm");
         for(auto m = mset.begin(); m != mset.end(); ++m)
         {
             m->updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/mset.dcm");
         for(auto k = kset.begin(); k != kset.end(); ++k)
         {
             k->updateDCM(*metainfo, *dataset, k->getMapPath(*targetFile));
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/kset.dcm");
         for(auto a = aset.begin(); a != aset.end(); ++a)
         {
             a->updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/aset.dcm");
         for(auto s:sset)
         {
             s.updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/sset.dcm");
         for(auto h:hset)
         {
             h.updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/hset.dcm");
         for(auto h:shset)
         {
             h.updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/shset.dcm");
         for(auto r:rCharset)
         {
             r.updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/rCharset.dcm");
         for(auto p:rPriv)
         {
             p.updateDCM(*metainfo, *dataset);
         }
+        
+        //fileformat.saveFile("/home/bswearingen/samples/rPriv.dcm");
         //TODO: abstract apply to here
         //send file to each connection
         for(auto f = fset.begin(); f != fset.end(); ++f)
