@@ -83,6 +83,13 @@ T_ASC_PresentationContextID Forward::getPresentationID(){
 }
 T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
 {
+    //TODO - This needs to be rewritten. I'm using it in a much different fashion than the original example.
+    //I need to gather all PCs from the header of the files I will be passing (maybe pass the whole dataset to here?)
+    //Then create the connection with all needed PCs.
+    //Probably two functions: getAllPCs(dataset), createConnection(PCs)
+    //Send then becomes trivial as it no longer needs a PC ID
+    //Need to figure out how to send a "finished" message as well
+    
 //    DcmSCU scu;
 //    T_ASC_PresentationContextID presID;
     OFList<OFString> ts;
@@ -114,10 +121,12 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
     scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_VerificationSOPClass, ts);
     
-    //add a special case pc we use often
+    //add some special case pcs we use often
     OFList<OFString> ts_leiONLY;
     ts_leiONLY.push_back(UID_LittleEndianImplicitTransferSyntax);
     scu.addPresentationContext(UID_RTStructureSetStorage, ts_leiONLY);
+    scu.addPresentationContext(UID_RTDoseStorage, ts_leiONLY);
+    scu.addPresentationContext(UID_RTPlanStorage, ts_leiONLY);
     
     //no longer using
     //scu.setDatasetConversionMode(OFTrue);
