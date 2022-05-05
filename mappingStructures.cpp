@@ -42,6 +42,7 @@ mapping::mapping(myMaps m)
     updateVec("seqhash",shset, m);
     updateVec("replaceChars",rCharset, m);
     updateVec("removePrivateTagsExcept",rPriv, m);
+    updateVec("save",sLocs,m);
     std::string k = "removePrivateTags";
     if ((m.find(k) != m.end()) && ((m.find(k)->second).begin()->compare("true") == 0))
     {
@@ -212,7 +213,13 @@ bool mapping::apply(std::string targetFile)
     {
         p.updateDCM(*metainfo, *dataset);
     }
-    //TODO: abstract apply to here
+    for(auto s:sLocs)
+    {
+        //TODO: add full path and name correction
+        //
+        DcmFileFormat *ff = &fileformat;
+        s.Save(ff);
+    }
     fileformat.saveFile("test.dcm");
     for(auto f = fset.begin(); f != fset.end(); ++f)
     {
@@ -356,8 +363,13 @@ bool mapping::apply(std::vector<std::string> targetFiles)
             p.updateDCM(*metainfo, *dataset);
         }
         
-        //fileformat.saveFile("/home/bswearingen/samples/rPriv.dcm");
-        //TODO: abstract apply to here
+        
+        for(auto s:sLocs)
+        {
+            //TODO: add full path and name correction
+            //fileformat.saveFile("test.dcm");
+            s.Save(&fileformat);
+        }
         //send file to each connection
         for(auto f = fset.begin(); f != fset.end(); ++f)
         {

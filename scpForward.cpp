@@ -8,7 +8,9 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 3
-#define VERSION_REVISION 6
+#define VERSION_REVISION 7
+
+//1.3.7 5/4/22 - added ability to output modified files to a directory
 
 //function to launch the SCP listener on a separate thread.
 void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
@@ -20,6 +22,8 @@ void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
     //while( (!b->getStopRunning()) && (x < 5))
     while( ((cfg->getValueOfKey<std::string>("keep_running")) == "True") && (x<5) )
     {
+        //TODO - log outputs seem to convert to binary at the front end, look into someday.
+        // somewhere I'm sending a non ascii character
         printf("Starting the SCP listener.\n");
         //it'll automatically "hang" here and listen forever
         //the only reasons it should stop are:
@@ -59,7 +63,6 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
     myListener->setACSETimeout(30);
     myListener->setDIMSETimeout(0);
     myListener->setDIMSEBlockingMode(DIMSE_BLOCKING);
-    myListener->setVerbosePCMode(OFFalse);
     myListener->setRespondWithCalledAETitle(OFTrue);
     myListener->setHostLookupEnabled(OFTrue);
     myListener->setFilenameGenerationMode(DcmStorageSCP::FGM_SOPInstanceUID);
@@ -70,6 +73,10 @@ void configureSCPListener(DcmStorageSCP *myListener, ConfigFile *cfg)
     myListener->setConnectionBlockingMode(DUL_NOBLOCK);
     //not really a timeout how I'm using it. More of a check for shutdown command frequency.
     myListener->setConnectionTimeout(5);
+    //presentation context negotiation and progress notification on receive
+    //doesn't seem to work the way I think it should, because they all still print
+    myListener->setVerbosePCMode(OFFalse);
+    myListener->setProgressNotificationMode(OFFalse);
     
     OFCondition status;
     status = myListener->loadAssociationConfiguration(OFString((cfg->getValueOfKey<std::string>("assoc_config")).c_str()), "Default");

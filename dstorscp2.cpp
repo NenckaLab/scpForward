@@ -340,7 +340,10 @@ void DcmStorageSCP::notifyInstanceStored(const OFString &filename,
     // by default, output some useful information
     time_t now = time(0);
 //    printf("Sending: %s\n", ctime(&now) );
-    DCMNET_INFO("Stored received object to file: " << filename << "  " << ctime(&now));
+    
+    //Commented to remove printout that doesn't actually tell me anything
+    //uncommented and change to input flag if there's a need for troubleshooting
+    //DCMNET_INFO("Stored received object to file: " << filename << "  " << ctime(&now));
 }
 
 

@@ -4,45 +4,7 @@
 //
 //  Created by Brad Swearingen on 7/23/19.
 //
-
-//#include "mapFwd.hpp"
-//#include <stdio.h>
-//#define BOOST_NO_CXX11_SCOPED_ENUMS
-////need BOOST_NO_CXX11_SCOPED_ENUMS to prevent bug on boost::filesystem::copy_file from showing up in Linux compiler
-//#include <boost/filesystem.hpp>
-//#undef BOOST_NO_CXX11_SCOPED_ENUMS
-//#include <boost/archive/text_oarchive.hpp>
-//#include <boost/generator_iterator.hpp>
-//#include <boost/random.hpp>
-//#include <boost/random/random_device.hpp>
-//#include <boost/algorithm/string.hpp>
-//#include <chrono>
-//#include <thread>
-//#include <random>
-//#include <ctime>
 #include "mapping.hpp"
-//#include "dcmtk/config/osconfig.h"
-//#include "loadConfig.h"
-//#include "md5.h"
-
-
-////helper function
-//std::string splitOnChar2(std::string &stToParse, char splitter)
-//{
-//    size_t sepPos = stToParse.find(splitter);
-//    std::string returnval;
-//    if(sepPos != std::string::npos)
-//    {
-//        returnval = stToParse.substr(0,sepPos);
-//        stToParse = stToParse.substr(sepPos + 1);
-//    } else {
-//        returnval = stToParse;
-//        //returnval.assign(stToParse);
-//        stToParse = "";
-//    }
-//    return returnval;
-//}
-
 
 Forward::Forward(std::string p_AETitle, std::string p_Dest, unsigned short p_DestPort)
 :AETitle(std::move(p_AETitle)), Dest(std::move(p_Dest)),DestPort(p_DestPort){}
@@ -99,7 +61,9 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
     scu.setPeerHostName(Dest.c_str());
     scu.setPeerPort(DestPort);
     /* Presentation context */
-    scu.setVerbosePCMode(OFTrue);
+    //Squash verbose output - see if this helps speed.
+    scu.setVerbosePCMode(OFFalse);
+    scu.setProgressNotificationMode(OFFalse);
     
     //add the presentation context per the dicom header
     //should update to better names

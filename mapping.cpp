@@ -836,6 +836,42 @@ std::string RemovePrivateTagsWithExceptions::toString()
 }
 
 
+SaveLoc::SaveLoc(std::string p_savePath):savePath(p_savePath){}
+bool SaveLoc::Save(DcmFileFormat *fileFormat)
+{
+    OFCondition status;
+    OFString res;
+    std::string fname="";
+    //DcmDataset *dataset = fileformat.getDataset();
+    DcmItem *di = fileFormat->getDataset();
+    //NOTE: may need a different findAndGet
+    //char res[50]; //="                                                   ";
+    status = di->findAndGetOFString(DcmTagKey(std::strtol("8", NULL, 16), std::strtol("18", NULL, 16)), res);
+    
+    std::cout<<"res "<<status.text()<<std::endl;
+    
+    //boost::algorithm::ends_with("mystring", "ing")
+    if(boost::algorithm::ends_with(savePath, "/"))
+    {
+        fname = savePath + res.c_str() + ".dcm";
+    }
+    else{
+        fname = savePath + "/" + res.c_str() + ".dcm";
+    }
+    
+    std::cout<<"Saving with value "<<res<<" at path "<<fname<<std::endl;
+    
+    
+    //get savePath
+    //if it doesn't end in /, add one
+    //figure out the name based on one of the UID's in fileFormat->dataset
+    //add that to the string
+    //add .dcm
+    
+    fileFormat->saveFile(OFFilename(fname.c_str()));
+}
+
+
 
 //forward moved to mapFwd.cpp
 

@@ -222,6 +222,15 @@ public:
     std::string toString();
 };
 
+class SaveLoc
+{
+private:
+    std::string savePath;
+public:
+    SaveLoc(std::string savePath);
+    bool Save(DcmFileFormat *fileFormat);
+};
+
 class AddtlProject
 {
 private:
@@ -252,6 +261,7 @@ private:
     typedef std::vector<SeqHash> sequencehash;
     typedef std::vector<ReplaceChars> replaceCharacters;
     typedef std::vector<RemovePrivateTagsWithExceptions> rmvPrivWExc;
+    typedef std::vector<SaveLoc> svLocs;
     
     //Or, we could reduce, but, that would significantly alter my order of operations
     referenceTimes rTimeset;
@@ -267,6 +277,7 @@ private:
     projects pset;
     replaceCharacters rCharset;
     rmvPrivWExc rPriv;
+    svLocs sLocs;
     
     bool rmvPrivateData = false;
     bool rmvCurveData = false;
