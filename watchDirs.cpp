@@ -29,7 +29,21 @@ WatchDirs::WatchDirs(const std::string &workingDir, const std::string &finalDir,
     this->path = workingDir;
     this->finishedPath = finalDir;
     this->adminEmail = adminEmail;
+    this->dcmProcThreshold = 90;
 }
+
+void WatchDirs::setProcessingThreshold(int procThreshold){
+    this->dcmProcThreshold = procThreshold;
+}
+
+WatchDirs::WatchDirs(const std::string &workingDir, const std::string &finalDir, const std::string &adminEmail, int procThreshold)
+{
+    this->path = workingDir;
+    this->finishedPath = finalDir;
+    this->adminEmail = adminEmail;
+    this->dcmProcThreshold = procThreshold;
+}
+
 int WatchDirs::sendmail(const char *to, const char *from, const char *subject, const char *message)
 {
     int retval = 01;
@@ -109,7 +123,8 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
 bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly, bool sort)
 {
     dirvec v;
-    bool cfgPresent, dcmPresent30sec, dcmPresent1hour = false;
+    //dcmPresent30sec is really just a dcms are found
+    bool cfgPresent, filesPresent, dcmPresent1hour = false;
     std::string cfgPath;
     mappings myMappings("");
 //    printf("%s\n", d.path().c_str());
@@ -122,52 +137,9 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
         {
             cfgPresent = true;
             myMappings.setPath(i->path().c_str());
+            break;
         }
     }
-    
-    
-//    //TODO - move this to a subprocess on subdirectories
-//    //pass path and myMappings
-//    //process dicoms
-//    for (auto i = v.begin(); i != v.end(); ++i)
-//    {
-//        //apply the rules found in the config file
-//        if(i->path().extension().string() == ".dcm")
-//        {
-//            //std::time_t t = boost::filesystem::last_write_time(i);
-//            std::time_t s = boost::filesystem::last_write_time(*i);
-//            std::time_t n = std::time(0);
-//            double d = difftime(n,s);
-//            //if i has been here for more than 30 seconds
-//            dcmPresent30sec = (d > 30);
-//            //if i has been here for more than 1 hour
-//            dcmPresent1hour = (d > 3600);
-//            if(!checkOnly && dcmPresent30sec && cfgPresent)
-//            {
-//                //apply the config file
-//                if(myMappings.apply(i->path().c_str()))
-//                {
-//                    //printf("Mappings applied\n");
-//                    //move the original file to the completed directory
-//                    boost::filesystem::path p(*i);
-//                    std::string test = p.c_str();
-//                    //boost::replace_all(test, "Output", "Finished");
-//                    boost::replace_all(test, path, finishedPath);
-//                    boost::filesystem::path dest(test);
-//                    std::string destPath = dest.parent_path().string();
-//                    if(!boost::filesystem::exists(destPath))
-//                    {
-//                        boost::filesystem::create_directories(destPath);
-//                    }
-////                        printf("   %s\n", p.c_str());
-////                        printf("   %s\n", test.c_str());
-//                    std::rename(p.c_str(),  test.c_str());
-//                    dcmPresent30sec = false;
-//                    dcmPresent1hour = false;
-//                }
-//            }
-//        }
-//    }
     
     //TODO - separate this better later
     if(sort){
@@ -206,7 +178,7 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
     
         for (auto i = v.begin(); i != v.end(); ++i)
         {
-            dcmPresent30sec = true;
+            filesPresent = true;
             //only process directories
             if(is_directory(*i)){
                 //process the session directory, returns true if it has dicoms and all are over 1 hour old.
@@ -216,7 +188,7 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
             }
         }
         
-        if(!cfgPresent && dcmPresent30sec)
+        if(!cfgPresent && filesPresent)
         {
            //send email to admin that this AETitle is receiving files
             //but has no config
@@ -249,7 +221,7 @@ bool WatchDirs::processSessionDir(mappings myMappings, boost::filesystem::direct
     //std::vector<boost::filesystem::path> toProcess;
     std::vector<std::string> toProcess;
     read_directory(sd.path().c_str(), v);
-    bool allDcmPresent90sec = true;
+    bool allDcmPresentProcThreshold = true;
     bool allDcmPresent1hour = true;
     
     //TODO - move this to a subprocess on subdirectories
@@ -267,10 +239,9 @@ bool WatchDirs::processSessionDir(mappings myMappings, boost::filesystem::direct
             std::time_t n = std::time(0);
             double d = difftime(n,s);
             //TODO - magic numbers, maybe move to the config file?
-            //also, could just return false if it fails the 90 sec check
-            if(d < 90){
+            if(d < dcmProcThreshold){
                 allDcmPresent1hour=false;
-                allDcmPresent90sec=false;
+                allDcmPresentProcThreshold=false;
                 break;
             }
             if(d < 3600){
@@ -283,16 +254,10 @@ bool WatchDirs::processSessionDir(mappings myMappings, boost::filesystem::direct
         return false;
     }
     
-    if(allDcmPresent90sec && cfgPresent){
+    if(allDcmPresentProcThreshold && cfgPresent){
         //apply the config file
         if(myMappings.applySession(toProcess))
         {
-            //TODO - this is where we aren't moving the directory for some reason
-            //was working before
-            //is failing now, but only if the destParent doesn't exist to beging with.
-            //probably want to do some printouts when testing this portion
-            
-            
             //sd is the directory we're processing
             std::string test = sd.path().c_str();
             //change the name to the finished directory

@@ -8,9 +8,10 @@
 
 #define VERSION_MAJOR 1
 #define VERSION_MINOR 3
-#define VERSION_REVISION 7
+#define VERSION_REVISION 8
 
 //1.3.7 5/4/22 - added ability to output modified files to a directory
+//1.3.8 7/22/22 - added min_proc_threshold - was hard coded to 90 seconds
 
 //function to launch the SCP listener on a separate thread.
 void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
@@ -93,6 +94,9 @@ void startDirectoryWatch(ConfigFile *cfg)
 {
     //TODO - need a way to capture and restart a fail.
     WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
+    if(cfg->keyExists("min_proc_threshold")){
+       w.setProcessingThreshold(cfg->getValueOfKey<int>("min_proc_threshold"));
+    }
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.runChecks();
@@ -104,6 +108,9 @@ void startDirectorySort(ConfigFile *cfg)
 {
     //TODO - need a way to capture and restart a fail.
     WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
+    if(cfg->keyExists("min_proc_threshold")){
+       w.setProcessingThreshold(cfg->getValueOfKey<int>("min_proc_threshold"));
+    }
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.sortChecks();
@@ -115,7 +122,8 @@ int main(int /*argc*/, char * /*argv*/ [])
 {
     
     printf("Version %d.%d.%d\n", VERSION_MAJOR, VERSION_MINOR, VERSION_REVISION);
-    
+    //TODO - add boost_program_options flags to be able to pass different configs
+    //then we can put all configs, input directories, and output directories in the same location
     ConfigFile cfg = getConfig();
     
     //Thread 1
@@ -124,23 +132,15 @@ int main(int /*argc*/, char * /*argv*/ [])
     std::thread scp(startSCPListener, &myListener, &cfg);
     printf("SCP thread has launched.\n");
     
-    //Thread 2
+    //Thread 2 - just processes sub directories
     std::thread dwatch(startDirectoryWatch, &cfg);
     printf("directory processor has launched.\n");
     
-    //Thread 3
+    //Thread 3 - just sorts into sub directories
     std::thread dsort(startDirectorySort, &cfg);
     printf("directory sorter has launched.\n");
     
     
-    //TODO - The future logic that watches cfg for updates will need to map back to this location in myListener.
-    //Do I really need to turn off both?
-//    sleep(12);
-//    cfg.updateKey("keep_running", "False");
-//    myListener.setStopRunning(OFTrue);
-//    printf("stop running should now be active\n");
-    
-//    cfgThread.join();
     scp.join();
     dwatch.join();
     dsort.join();

@@ -128,9 +128,10 @@ T_ASC_PresentationContextID Forward::CreateConnection(DcmMetaInfo &mi)
     result = scu.sendECHORequest(0);
     if (result.bad())
     {
+        //not a show stopper, as some won't respond to echo, but definitely log this.
         printf("echo: %s\n", result.text());
-        scu.releaseAssociation();
-        return 0;
+        //scu.releaseAssociation();
+        //return 0;
     }
     Uint8 pc;
     pc = scu.findPresentationContextID(UID_RTStructureSetStorage,UID_LittleEndianImplicitTransferSyntax );
@@ -251,6 +252,7 @@ bool Forward::Send(std::string fPath, DcmMetaInfo &mi )
     scu.addPresentationContext(seed2, ts2);
     //scu.addPresentationContext(UID_MRImageStorage, ts2);
     
+    //add some standard presentation contexts
     scu.addPresentationContext(UID_FINDStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_MOVEStudyRootQueryRetrieveInformationModel, ts);
     scu.addPresentationContext(UID_VerificationSOPClass, ts);

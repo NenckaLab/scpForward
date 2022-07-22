@@ -10,23 +10,21 @@ set(SOURCE_FILES scpForward.cpp dstorscp2.h dstorscp2.cpp loadConfig.h loadConfi
 find_package(DCMTK REQUIRED)
 
 include_directories(${DCMTK_INCLUDE_DIRS})
-include_directories(/opt/local/include/boost)
 
-#add_library(${PROJECT_NAME} ${SOURCE_FILES})
 add_executable(${PROJECT_NAME} ${SOURCE_FILES})
-
+#message("TEST")
 if(APPLE)
-    target_link_libraries(${PROJECT_NAME} /opt/local/lib/libz.1.2.11.dylib)
-    target_link_libraries(${PROJECT_NAME} /opt/local/lib/libboost_system-mt.dylib)
-    target_link_libraries(${PROJECT_NAME} /opt/local/lib/libboost_filesystem-mt.dylib)
+    find_package(Boost COMPONENTS system filesystem REQUIRED)
+    include_directories( ${Boost_INCLUDE_DIR} )
+    target_link_libraries(${PROJECT_NAME} ${Boost_LIBRARIES})
+    target_link_libraries(${PROJECT_NAME} libz.dylib)
 else()
+    include_directories(/opt/local/include/boost)
     target_link_libraries(${PROJECT_NAME} /lib64/libz.so)
     target_link_libraries(${PROJECT_NAME} /lib64/libboost_system-mt.so)
     target_link_libraries(${PROJECT_NAME} /lib64/libboost_filesystem-mt.so)
 endif()
 target_link_libraries(${PROJECT_NAME} ${DCMTK_LIBRARIES})
 
-
-# Install this example rehearsal code along with this CMakeLists.txt file
 install(FILES ${SOURCE_FILES} DESTINATION "scpFwd.exe")
 install(FILES "CMakeLists.txt" DESTINATION "scpFwd.exe")

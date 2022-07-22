@@ -24,6 +24,7 @@ private:
     std::string path;
     std::string finishedPath;
     std::string adminEmail;
+    int dcmProcThreshold;
     sendmap lastsent;
     
     void read_directory(const std::string& name, stringvec& v);
@@ -37,6 +38,9 @@ private:
     
 public:
     WatchDirs(const std::string &workingDir, const std::string &finalDir, const std::string &adminEmail);
+    
+    WatchDirs(const std::string &workingDir, const std::string &finalDir, const std::string &adminEmail, int procThreshold);
+    void setProcessingThreshold(int procThreshold);
     bool sortChecks();
     bool runChecks();
 };
