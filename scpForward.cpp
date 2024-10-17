@@ -7,11 +7,13 @@
 #include "watchDirs.hpp"
 
 #define VERSION_MAJOR 1
-#define VERSION_MINOR 3
-#define VERSION_REVISION 8
+#define VERSION_MINOR 4
+#define VERSION_REVISION 1
 
 //1.3.7 5/4/22 - added ability to output modified files to a directory
 //1.3.8 7/22/22 - added min_proc_threshold - was hard coded to 90 seconds
+//1.4.0 10/15/24 - add multiple directory processing threads along with directory lock, handle "unknown" projects
+//1.4.1 10/16/24 - squash lots of bugs, especially issues with sleep commands and symlinks
 
 //function to launch the SCP listener on a separate thread.
 void startSCPListener(DcmStorageSCP *b, ConfigFile *cfg)
@@ -93,6 +95,8 @@ ConfigFile getConfig()
 void startDirectoryWatch(ConfigFile *cfg)
 {
     //TODO - need a way to capture and restart a fail.
+    //get sleep seconds, default to 5
+    int sleep_secs = cfg->getValueOfKey<int>("thread_sleep_secs",5);
     WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
     if(cfg->keyExists("min_proc_threshold")){
        w.setProcessingThreshold(cfg->getValueOfKey<int>("min_proc_threshold"));
@@ -100,13 +104,15 @@ void startDirectoryWatch(ConfigFile *cfg)
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.runChecks();
-        sleep(2);
+        sleep(sleep_secs);
     }
 }
 
 void startDirectorySort(ConfigFile *cfg)
 {
     //TODO - need a way to capture and restart a fail.
+    //get sleep seconds, default to 5
+    int sleep_secs = cfg->getValueOfKey<int>("thread_sleep_secs",5);
     WatchDirs w(cfg->getValueOfKey<std::string>("output_dir"), cfg->getValueOfKey<std::string>("finished_dir"), cfg->getValueOfKey<std::string>("admin_email"));
     if(cfg->keyExists("min_proc_threshold")){
        w.setProcessingThreshold(cfg->getValueOfKey<int>("min_proc_threshold"));
@@ -114,7 +120,7 @@ void startDirectorySort(ConfigFile *cfg)
     while(cfg->getValueOfKey<std::string>("keep_running") == "True")
     {
         w.sortChecks();
-        sleep(2);
+        sleep(sleep_secs);
     }
 }
 
@@ -133,17 +139,37 @@ int main(int /*argc*/, char * /*argv*/ [])
     printf("SCP thread has launched.\n");
     
     //Thread 2 - just processes sub directories
-    std::thread dwatch(startDirectoryWatch, &cfg);
-    printf("directory processor has launched.\n");
+    // get number of desired threads from config, default to 2
+    int numDirThreads = cfg.getValueOfKey<int>("number_of_sort_threads", 2);
+    //std::thread dwatch(startDirectoryWatch, &cfg);
+    //printf("directory processor has launched.\n");
+    std::vector<std::thread> dirThreadPool;
+    std::vector<std::thread> dirSortPool;
+    for (int i = 0; i < numDirThreads; ++i){
+        dirThreadPool.emplace_back(startDirectoryWatch, &cfg);
+        printf("Started processor thread %d.\n",i);
+        dirSortPool.emplace_back(startDirectorySort, &cfg);
+        printf("Started sorter thread %d.\n",i);
+    }
     
-    //Thread 3 - just sorts into sub directories
-    std::thread dsort(startDirectorySort, &cfg);
-    printf("directory sorter has launched.\n");
+//    //Thread 3 - just sorts into sub directories
+//    std::thread dsort(startDirectorySort, &cfg);
+//    printf("directory sorter has launched.\n");
     
-    
+    //join all threads so they stop in an orderly fashion
     scp.join();
-    dwatch.join();
-    dsort.join();
+    //dwatch.join();
+    for (std::thread& t : dirThreadPool){
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+    for (std::thread& t : dirSortPool){
+        if (t.joinable()) {
+            t.join();
+        }
+    }
+    //dsort.join();
     printf("stopped\n");
 }
 

@@ -8,6 +8,12 @@
 #include "watchDirs.hpp"
 #include <boost/algorithm/string.hpp>
 
+// Defined as static in the header, chat says I also need to define here
+std::map<std::string, std::mutex> WatchDirs::directoryLocks;
+std::mutex WatchDirs::mapMutex;
+WatchDirs::sendmap WatchDirs::lastsent;
+
+
 struct path_leaf_string
 {
     std::string operator()(const boost::filesystem::directory_entry& entry) const
@@ -120,17 +126,89 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
     return WatchDirs::process_aetitle_dir(d, false, false);
 }
 
+/*
+ process_aetitle_dir(d, checkOnly, sort)
+ processes directory d
+ if checkOnly is True, it won't do anything, it'll just check
+ if sort is True, it'll just sort the directory, but won't process the files
+ Returns True if the request completed successfully and processed the directory and False otherwise.
+ Return doesn't appear to matter as I never use it...
+ */
 bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool checkOnly, bool sort)
 {
-    dirvec v;
-    //dcmPresent30sec is really just a dcms are found
-    bool cfgPresent, filesPresent, dcmPresent1hour = false;
+    if (!lockDirectory(d)){
+        //if we're unable to lock the directory, that means something else is already processing it
+        return false;
+    }
+    
+    
+    bool result = false;
+    
+    try {
+        printf("Processing %s.\n",d.path().c_str());
+        
+        dirvec v;
+        read_directory(d.path().c_str(), v);
+        
+        if(sort){
+            result = process_aetitle_dir_sort(v);
+        }else{
+            result = process_aetitle_dir_process(v, d);
+        }
+        
+    } catch (const std::exception& e) {
+        printf("Error in directory: %s\n    %s\n", d.path().c_str(), e.what());
+    } catch (...) {
+        printf("Undefined exception caught in directory watch.\n");
+    }
+    
+    unlockDirectory(d);
+    return result;
+}
+
+bool WatchDirs::process_aetitle_dir_sort(const dirvec& v){
+    
+    for (auto i = v.begin(); i != v.end(); ++i)
+    {
+        
+        //if this is a dcm, move it.
+        if(exists(*i) && is_regular_file(*i) && (i->path().extension().string() == ".dcm"))
+        {
+            //            std::cout<<"found a file: "<<i->path().filename().string()<<std::endl;
+            //            std::cout<<"   "<<i->path().string()<<std::endl;
+            //get the correct UID for the session
+            long group = std::strtol("0x0020", NULL, 16);
+            long element = std::strtol("0x000D", NULL, 16);
+            DcmFileFormat fileformat;
+            OFCondition status = fileformat.loadFile(i->path().string().c_str());
+            if (!status.good())
+            {
+                return false;
+            }
+            DcmDataset *dataset = fileformat.getDataset();
+            OFString value = "Default String";
+            dataset->findAndGetOFString(DcmTagKey(group, element), value);
+            //            std::cout<<"    "<<value.c_str()<<std::endl;
+            
+            //create the folder if it doesn't exist
+            std::string destPath(i->path().parent_path().string() + "/" + value.c_str() ); // + i->path().filename().c_str())
+            if(!boost::filesystem::exists(destPath))
+            {
+                boost::filesystem::create_directories(destPath);
+            }
+            //move the file
+            std::rename(i->path().string().c_str(), (destPath + "/" + i->path().filename().string()).c_str() );
+        }
+    }
+    return true;
+}
+
+bool WatchDirs::process_aetitle_dir_process(const dirvec& v, boost::filesystem::directory_entry d){
+    bool filesPresent, dcmPresent1hour = false;
+    //first, find the config file
+    bool cfgPresent = false;
     std::string cfgPath;
     mappings myMappings("");
-//    printf("%s\n", d.path().c_str());
-    read_directory(d.path().c_str(), v);
-    
-    //first, find the config file
     for (auto i = v.begin(); i != v.end(); ++i)
     {
         if(i->path().filename().string() == "myname.cfg")
@@ -141,82 +219,58 @@ bool WatchDirs::process_aetitle_dir(boost::filesystem::directory_entry d, bool c
         }
     }
     
-    //TODO - separate this better later
-    if(sort){
-        for (auto i = v.begin(); i != v.end(); ++i)
-        {
-            //if this is a dcm, move it.
-            if(exists(*i) && is_regular_file(*i) && (i->path().extension().string() == ".dcm"))
-            {
-    //            std::cout<<"found a file: "<<i->path().filename().string()<<std::endl;
-    //            std::cout<<"   "<<i->path().string()<<std::endl;
-                //get the correct UID for the session
-                long group = std::strtol("0x0020", NULL, 16);
-                long element = std::strtol("0x000D", NULL, 16);
-                DcmFileFormat fileformat;
-                OFCondition status = fileformat.loadFile(i->path().string().c_str());
-                if (!status.good())
-                {
-                    return false;
-                }
-                DcmDataset *dataset = fileformat.getDataset();
-                OFString value = "Default String";
-                dataset->findAndGetOFString(DcmTagKey(group, element), value);
-    //            std::cout<<"    "<<value.c_str()<<std::endl;
-                
-                //create the folder if it doesn't exist
-                std::string destPath(i->path().parent_path().string() + "/" + value.c_str() ); // + i->path().filename().c_str())
-                if(!boost::filesystem::exists(destPath))
-                {
-                    boost::filesystem::create_directories(destPath);
-                }
-                //move the file
-                std::rename(i->path().string().c_str(), (destPath + "/" + i->path().filename().string()).c_str() );
+    for (auto i = v.begin(); i != v.end(); ++i)
+    {
+        filesPresent = true;
+        //only process directories
+        if(is_directory(*i)){
+            //process the session directory, returns true if it has dicoms and all are over 1 hour old.
+            if(WatchDirs::processSessionDir(myMappings, *i, cfgPresent)){
+                dcmPresent1hour = true;
             }
         }
-    }else{
-    
-        for (auto i = v.begin(); i != v.end(); ++i)
-        {
-            filesPresent = true;
-            //only process directories
-            if(is_directory(*i)){
-                //process the session directory, returns true if it has dicoms and all are over 1 hour old.
-                if(WatchDirs::processSessionDir(myMappings, *i, cfgPresent)){
-                    dcmPresent1hour = true;
-                }
-            }
-        }
-        
-        if(!cfgPresent && filesPresent)
-        {
-           //send email to admin that this AETitle is receiving files
-            //but has no config
-            //something like:
-            //fireEmail(toAddress,ccAddress,timeframe,directory,reason);
-            fireEmails(adminEmail,"",24,d,"AETitle folder exists with dicoms, but has no config file.\nPath is: " + d.path().string() + "\n");
-            return false;
-        }
-       else if(cfgPresent && dcmPresent1hour)
-        {
-            //get local email
-            std::string projEmail = myMappings.getProjEmail();
-            if(projEmail == "")
-            {
-                projEmail = adminEmail;
-            }
-            //get when email last sent - configs gets reloaded, so we'll need to store in this object
-            //      some sort of mapping...
-            //send email status to admin and user email - ~ daily?
-            fireEmails(projEmail,adminEmail,24,d,"AETitle folder exists with dicoms. Config file exists, but was not applied.\nPath is: " + d.path().string() + "\n");
-            return false;
-        }
-        else{}
     }
+    
+    if(!cfgPresent && filesPresent)
+    {
+       //send email to admin that this AETitle is receiving files
+        //but has no config
+        //something like:
+        //fireEmail(toAddress,ccAddress,timeframe,directory,reason);
+        fireEmails(adminEmail,"",24,d,"AETitle folder exists with dicoms, but has no config file.\nPath is: " + d.path().string() + "\n");
+        return false;
+    }
+   else if(cfgPresent && dcmPresent1hour)
+    {
+        //get local email
+        std::string projEmail = myMappings.getProjEmail();
+        if(projEmail == "")
+        {
+            projEmail = adminEmail;
+        }
+        //get when email last sent - configs gets reloaded, so we'll need to store in this object
+        //      some sort of mapping...
+        //send email status to admin and user email - ~ daily?
+        fireEmails(projEmail,adminEmail,24,d,"AETitle folder exists with dicoms. Config file exists, but was not applied.\nPath is: " + d.path().string() + "\n");
+        return false;
+    }
+    else{}
     return true;
 }
 
+
+
+
+
+
+
+
+
+
 bool WatchDirs::processSessionDir(mappings myMappings, boost::filesystem::directory_entry sd, bool cfgPresent){
+    
+    // TODO - block this when dicoms are found so additional threads don't process at the same time
+    
     dirvec v;
     //std::vector<boost::filesystem::path> toProcess;
     std::vector<std::string> toProcess;
@@ -300,19 +354,8 @@ bool WatchDirs::sortChecks()
     read_directory(path , v);
     for (auto i = v.begin(); i != v.end(); ++i)
     {
-        
         if(exists(*i) && is_directory(*i)){
-            //try so the entire thread doesn't collapse from a bad config file.
-            //extra delay on a fail, just so the system doesn't hammer a bad config quite as fast.
-            try {
-                process_aetitle_dir(*i, false, true);
-            } catch (const std::exception& e) {
-                printf("Error in directory: %s\n    %s\n", i->path().c_str(), e.what());
-                sleep(10);
-            } catch (...) {
-                printf("Undefined exception caught in directory watch.\n");
-                sleep(10);
-            }
+            process_aetitle_dir(*i, false, true);
         }
     }
     return true;
@@ -325,20 +368,45 @@ bool WatchDirs::runChecks()
     read_directory(path , v);
     for (auto i = v.begin(); i != v.end(); ++i)
     {
-        
         if(exists(*i) && is_directory(*i)){
-            //try so the entire thread doesn't collapse from a bad config file.
-            //extra delay on a fail, just so the system doesn't hammer a bad config quite as fast.
-            try {
-                process_aetitle_dir(*i);
-            } catch (const std::exception& e) {
-                printf("Error in directory: %s\n    %s\n", i->path().c_str(), e.what());
-                sleep(10);
-            } catch (...) {
-                printf("Undefined exception caught in directory watch.\n");
-                sleep(10);
-            }
+            process_aetitle_dir(*i);
         }
     }
     return true;
 }
+
+bool WatchDirs::lockDirectory(const boost::filesystem::directory_entry& dir) {
+    // Resolve the symlink to get the target directory
+    std::string dirPath = boost::filesystem::canonical(dir).string();
+    // Lock the mapMutex to safely check/update directoryLocks
+    std::lock_guard<std::mutex> guard(mapMutex);
+    auto it = directoryLocks.find(dirPath);
+    if (it == directoryLocks.end()) {
+        // If directory is not in the map, create a new mutex for it
+        directoryLocks[dirPath];
+        it = directoryLocks.find(dirPath);
+    }
+
+    // Try to lock the directory mutex without blocking
+    if (it->second.try_lock()) {
+        //printf("Lock %s\n",dirPath.c_str());
+        return true;  // Successfully locked
+    } else {
+        return false;  // Directory is already locked by another thread
+    }
+}
+
+void WatchDirs::unlockDirectory(const boost::filesystem::directory_entry& dir) {
+    // Resolve the symlink to get the target directory
+    std::string dirPath = boost::filesystem::canonical(dir).string();
+    // Lock the mapMutex to safely access directoryLocks
+    std::lock_guard<std::mutex> guard(mapMutex);
+    auto it = directoryLocks.find(dirPath);
+    if (it != directoryLocks.end()) {
+        //printf("Unlock %s\n",dirPath.c_str());
+        // Unlock the mutex if it exists for the directory
+        it->second.unlock();
+    }
+}
+
+

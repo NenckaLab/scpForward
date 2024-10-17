@@ -903,6 +903,9 @@ bool AddtlProject::Send(std::string fPath, DcmMetaInfo &mi, DcmDataset &ds )
             return false;
         }
         AETitle = key.c_str();
+        if (AETitle == ""){
+            AETitle = "Unknown";
+        }
     }
     
     //copy the raw file into the new AETitle folder
